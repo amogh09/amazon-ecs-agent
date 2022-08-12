@@ -1207,6 +1207,7 @@ func TestTaskFromACS(t *testing.T) {
 		DesiredStatus: strptr("RUNNING"),
 		Family:        strptr("myFamily"),
 		Version:       strptr("1"),
+		ServiceName:   strptr("myService"),
 		Containers: []*ecsacs.Container{
 			{
 				Name:        strptr("myName"),
@@ -1302,6 +1303,7 @@ func TestTaskFromACS(t *testing.T) {
 		DesiredStatusUnsafe: apitaskstatus.TaskRunning,
 		Family:              "myFamily",
 		Version:             "1",
+		ServiceName:         "myService",
 		Containers: []*apicontainer.Container{
 			{
 				Name:        "myName",
@@ -3308,6 +3310,16 @@ func TestTaskFromACSPerContainerTimeouts(t *testing.T) {
 
 	assert.Equal(t, task.Containers[0].StartTimeout, expectedTimeout)
 	assert.Equal(t, task.Containers[0].StopTimeout, expectedTimeout)
+}
+
+// Tests that ACS Task to Task translation does not fail when ServiceName is missing.
+// Asserts that Task.ServiceName is empty in such a case.
+func TestTaskFromACSServiceNameMissing(t *testing.T) {
+	taskFromACS := ecsacs.Task{} // No service name
+	seqNum := int64(42)
+	task, err := TaskFromACS(&taskFromACS, &ecsacs.PayloadMessage{SeqNum: &seqNum})
+	assert.Nil(t, err, "Should be able to handle acs task")
+	assert.Equal(t, task.ServiceName, "")
 }
 
 func TestGetContainerIndex(t *testing.T) {
