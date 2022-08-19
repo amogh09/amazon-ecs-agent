@@ -44,6 +44,7 @@ func testPutTaskProtectionHandler(t *testing.T, state dockerstate.TaskEngineStat
 	assert.NoError(t, err, "Expected response must be JSON encodable")
 
 	// Assert response
+	assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
 	assert.Equal(t, expectedResponseCode, rr.Code)
 	responseBody, err := io.ReadAll(rr.Body)
 	assert.NoError(t, err, "Failed to read response body")
