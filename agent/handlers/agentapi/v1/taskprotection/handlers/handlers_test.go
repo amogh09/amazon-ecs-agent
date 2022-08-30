@@ -159,6 +159,26 @@ func TestPutTaskProtectionHandlerTaskNotFound(t *testing.T) {
 		http.StatusInternalServerError)
 }
 
+// TestPutTaskProtectionHandlerNoService tests PutTaskProtection handler's behavior
+// when the task found for the requeest does not belong to a service.
+func TestPutTaskProtectionHandlerNoService(t *testing.T) {
+	request := TaskProtectionRequest{ProtectionType: string(types.TaskProtectionTypeDisabled)}
+
+	taskARN := "taskARN"
+	task := task.Task{
+		Arn: taskARN,
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockState := mock_dockerstate.NewMockTaskEngineState(ctrl)
+	mockState.EXPECT().TaskARNByV3EndpointID(gomock.Eq("endpointID")).Return(taskARN, true)
+	mockState.EXPECT().TaskByArn(gomock.Eq(taskARN)).Return(&task, true)
+
+	testPutTaskProtectionHandler(t, mockState, "endpointID", request, noServiceFoundErrorMsg,
+		http.StatusBadRequest)
+}
+
 // TestPutTaskProtectionHandlerHappy tests PutTaskProtection handler's
 // behavior when request and state both are good.
 func TestPutTaskProtectionHandlerHappy(t *testing.T) {
@@ -246,4 +266,21 @@ func TestGetTaskProtectionHandlerHappy(t *testing.T) {
 	mockState.EXPECT().TaskByArn(gomock.Eq(taskARN)).Return(&task, true)
 
 	testGetTaskProtectionHandler(t, mockState, "endpointID", "Ok", http.StatusOK)
+}
+
+// TestGetTaskProtectionHandlerNoService test GetTaskProtection handler's behavior when
+// the task found for the request does not belong to a service.
+func TestGetTaskProtectionHandlerNoService(t *testing.T) {
+	taskARN := "taskARN"
+	task := task.Task{
+		Arn: taskARN,
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockState := mock_dockerstate.NewMockTaskEngineState(ctrl)
+	mockState.EXPECT().TaskARNByV3EndpointID(gomock.Eq("endpointID")).Return(taskARN, true)
+	mockState.EXPECT().TaskByArn(gomock.Eq(taskARN)).Return(&task, true)
+
+	testGetTaskProtectionHandler(t, mockState, "endpointID", noServiceFoundErrorMsg, http.StatusBadRequest)
 }

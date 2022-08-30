@@ -15,6 +15,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -25,6 +26,10 @@ import (
 	v3 "github.com/aws/amazon-ecs-agent/agent/handlers/v3"
 	"github.com/aws/amazon-ecs-agent/agent/logger"
 	loggerfield "github.com/aws/amazon-ecs-agent/agent/logger/field"
+)
+
+const (
+	noServiceFoundErrorMsg = "The task does not belong to a service. Task protection feature is available only for tasks belonging to a service."
 )
 
 // Returns endpoint path for PutTaskProtection API
@@ -81,6 +86,11 @@ func PutTaskProtectionHandler(state dockerstate.TaskEngineState,
 			return
 		}
 
+		if err = validateTask(task); err != nil {
+			writeJSONResponse(w, http.StatusBadRequest, err.Error(), putTaskProtectionRequestType)
+			return
+		}
+
 		// TODO: Call ECS
 		logger.Info("Would have called ECS.PutTaskProtection with fields", logger.Fields{
 			"cluster":                  cluster,
@@ -108,6 +118,15 @@ func getTaskFromRequest(state dockerstate.TaskEngineState, r *http.Request) (*ap
 	return task, nil
 }
 
+// Validates the task for Task Protection
+func validateTask(task *apitask.Task) error {
+	if task.ServiceName == "" {
+		return errors.New(noServiceFoundErrorMsg)
+	}
+
+	return nil
+}
+
 // GetTaskProtectionHandler returns a handler function for GetTaskProtection API
 func GetTaskProtectionHandler(state dockerstate.TaskEngineState,
 	cluster string) func(http.ResponseWriter, *http.Request) {
@@ -118,6 +137,11 @@ func GetTaskProtectionHandler(state dockerstate.TaskEngineState,
 		if err != nil {
 			writeJSONResponse(w, http.StatusInternalServerError,
 				fmt.Sprintf("Failed to find task: %v", err), getTaskProtectionRequestType)
+			return
+		}
+
+		if err = validateTask(task); err != nil {
+			writeJSONResponse(w, http.StatusBadRequest, err.Error(), getTaskProtectionRequestType)
 			return
 		}
 
