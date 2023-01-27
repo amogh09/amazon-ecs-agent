@@ -15,15 +15,18 @@ package handlers
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
+	tmdsAgentAPIv1Handlers "git-codecommit.us-west-2.amazonaws.com/v1/repos/amazon-ecs-agent-tmds.git/metadata/endpoints/api/task-protection/v1/handlers"
+	tmdsAgentAPIv1 "git-codecommit.us-west-2.amazonaws.com/v1/repos/amazon-ecs-agent-tmds.git/metadata/endpoints/api/task-protection/v1/types"
 	"github.com/aws/amazon-ecs-agent/agent/api"
 	"github.com/aws/amazon-ecs-agent/agent/config"
 	"github.com/aws/amazon-ecs-agent/agent/credentials"
 	"github.com/aws/amazon-ecs-agent/agent/engine/dockerstate"
-	agentAPITaskProtectionV1 "github.com/aws/amazon-ecs-agent/agent/handlers/agentapi/taskprotection/v1/handlers"
 	handlersutils "github.com/aws/amazon-ecs-agent/agent/handlers/utils"
 	v1 "github.com/aws/amazon-ecs-agent/agent/handlers/v1"
 	v2 "github.com/aws/amazon-ecs-agent/agent/handlers/v2"
@@ -46,6 +49,43 @@ const (
 	// The value is set to 5 seconds as per AWS SDK defaults.
 	writeTimeout = 5 * time.Second
 )
+
+type credentialsGetter struct {
+	credentialsManager credentials.Manager
+}
+
+func (credsGetter *credentialsGetter) GetTaskRoleCredentials(
+	task tmdsAgentAPIv1.Task) (*tmdsAgentAPIv1.AWSCredentials, error) {
+	taskRoleCredential, ok := credsGetter.credentialsManager.GetTaskCredentials(task.CredentialsID)
+	if !ok {
+		return nil, fmt.Errorf("credentials not found for task %s", task.ARN)
+	}
+	cred := taskRoleCredential.GetIAMRoleCredentials()
+	return &tmdsAgentAPIv1.AWSCredentials{
+		AccessKeyID:     cred.AccessKeyID,
+		SecretAccessKey: cred.SecretAccessKey,
+		SessionToken:    cred.SessionToken,
+	}, nil
+}
+
+type taskGetter struct {
+	state dockerstate.TaskEngineState
+}
+
+func (tg *taskGetter) GetTaskByV3EndpointID(v3EndpointID string) (*tmdsAgentAPIv1.Task, error) {
+	taskARN, ok := tg.state.TaskARNByV3EndpointID(v3EndpointID)
+
+	if !ok {
+		return nil, fmt.Errorf("unable to get task Arn from v3 endpoint ID: %s", v3EndpointID)
+	}
+
+	task, found := tg.state.TaskByArn(taskARN)
+	if !found {
+		return nil, errors.New("Failed to find a task for the request")
+	}
+
+	return &tmdsAgentAPIv1.Task{ARN: taskARN, CredentialsID: task.GetCredentialsID()}, nil
+}
 
 func taskServerSetup(credentialsManager credentials.Manager,
 	auditLogger audit.AuditLogger,
@@ -76,7 +116,9 @@ func taskServerSetup(credentialsManager credentials.Manager,
 
 	v4HandlersSetup(muxRouter, state, ecsClient, statsEngine, cluster, availabilityZone, vpcID, containerInstanceArn)
 
-	agentAPIV1HandlersSetup(muxRouter, state, credentialsManager, cluster, region, apiEndpoint, acceptInsecureCert)
+	taskGetter := taskGetter{state}
+	credsGetter := credentialsGetter{credentialsManager}
+	tmdsAgentAPIv1Handlers.RegisterHandlers(muxRouter, &credsGetter, &taskGetter, cluster, region)
 
 	limiter := tollbooth.NewLimiter(int64(steadyStateRate), nil)
 	limiter.SetOnLimitReached(handlersutils.LimitReachedHandler(auditLogger))
@@ -103,8 +145,7 @@ func taskServerSetup(credentialsManager credentials.Manager,
 }
 
 // v2HandlersSetup adds all handlers in v2 package to the mux router.
-func v2HandlersSetup(muxRouter *mux.Router,
-	state dockerstate.TaskEngineState,
+func v2HandlersSetup(muxRouter *mux.Router, state dockerstate.TaskEngineState,
 	ecsClient api.ECSClient,
 	statsEngine stats.Engine,
 	cluster string,
@@ -158,23 +199,6 @@ func v4HandlersSetup(muxRouter *mux.Router,
 	muxRouter.HandleFunc(v4.ContainerAssociationsPath, v4.ContainerAssociationsHandler(state))
 	muxRouter.HandleFunc(v4.ContainerAssociationPathWithSlash, v4.ContainerAssociationHandler(state))
 	muxRouter.HandleFunc(v4.ContainerAssociationPath, v4.ContainerAssociationHandler(state))
-}
-
-// agentAPIV1HandlersSetup adds handlers for Agent API V1
-func agentAPIV1HandlersSetup(muxRouter *mux.Router, state dockerstate.TaskEngineState, credentialsManager credentials.Manager, cluster string, region string, endpoint string, acceptInsecureCert bool) {
-	factory := agentAPITaskProtectionV1.TaskProtectionClientFactory{
-		Region: region, Endpoint: endpoint, AcceptInsecureCert: acceptInsecureCert,
-	}
-	muxRouter.
-		HandleFunc(
-			agentAPITaskProtectionV1.TaskProtectionPath(),
-			agentAPITaskProtectionV1.UpdateTaskProtectionHandler(state, credentialsManager, factory, cluster)).
-		Methods("PUT")
-	muxRouter.
-		HandleFunc(
-			agentAPITaskProtectionV1.TaskProtectionPath(),
-			agentAPITaskProtectionV1.GetTaskProtectionHandler(state, credentialsManager, factory, cluster)).
-		Methods("GET")
 }
 
 // ServeTaskHTTPEndpoint serves task/container metadata, task/container stats, IAM Role Credentials, and Agent APIs

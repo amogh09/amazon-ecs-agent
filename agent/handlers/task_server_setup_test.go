@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	tmdsAgentAPIv1 "git-codecommit.us-west-2.amazonaws.com/v1/repos/amazon-ecs-agent-tmds.git/metadata/endpoints/api/task-protection/v1/types"
 	apicontainer "github.com/aws/amazon-ecs-agent/agent/api/container"
 	apicontainerstatus "github.com/aws/amazon-ecs-agent/agent/api/container/status"
 	apieni "github.com/aws/amazon-ecs-agent/agent/api/eni"
@@ -40,7 +41,6 @@ import (
 	mock_credentials "github.com/aws/amazon-ecs-agent/agent/credentials/mocks"
 	"github.com/aws/amazon-ecs-agent/agent/ecs_client/model/ecs"
 	mock_dockerstate "github.com/aws/amazon-ecs-agent/agent/engine/dockerstate/mocks"
-	task_protection_v1 "github.com/aws/amazon-ecs-agent/agent/handlers/agentapi/taskprotection/v1/handlers"
 	"github.com/aws/amazon-ecs-agent/agent/handlers/utils"
 	v1 "github.com/aws/amazon-ecs-agent/agent/handlers/v1"
 	v2 "github.com/aws/amazon-ecs-agent/agent/handlers/v2"
@@ -1923,7 +1923,7 @@ func TestAgentAPIV1GetTaskProtectionHandler(t *testing.T) {
 
 // Tests that Agent API v1 UpdateTaskProtection handler is registered correctly
 func TestAgentAPIV1UpdateTaskProtectionHandler(t *testing.T) {
-	requestBody := task_protection_v1.TaskProtectionRequest{
+	requestBody := tmdsAgentAPIv1.TaskProtectionRequest{
 		ProtectionEnabled: agentutils.BoolPtr(false),
 	}
 	testAgentAPITaskProtectionV1Handler(t, requestBody, "PUT")

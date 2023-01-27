@@ -3,6 +3,7 @@ module github.com/aws/amazon-ecs-agent/agent
 go 1.12
 
 require (
+	git-codecommit.us-west-2.amazonaws.com/v1/repos/amazon-ecs-agent-tmds.git v0.0.0-20230127013237-9aa0e16d0f47
 	github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 // indirect
 	github.com/aws/aws-sdk-go v1.36.0
 	github.com/awslabs/go-config-generator-for-fluentd-and-fluentbit v0.0.0-20190829210224-55d4fd2e6f35
@@ -29,7 +30,6 @@ require (
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
 	github.com/opencontainers/image-spec v1.0.2 // indirect
 	github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417
-	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pborman/uuid v0.0.0-20150603214016-ca53cad383ca
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v0.9.4
