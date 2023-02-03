@@ -28,7 +28,6 @@ import (
 	"testing"
 	"time"
 
-	tmdsAgentAPIv1 "git-codecommit.us-west-2.amazonaws.com/v1/repos/amazon-ecs-agent-tmds.git/metadata/endpoints/api/task-protection/v1/types"
 	apicontainer "github.com/aws/amazon-ecs-agent/agent/api/container"
 	apicontainerstatus "github.com/aws/amazon-ecs-agent/agent/api/container/status"
 	apieni "github.com/aws/amazon-ecs-agent/agent/api/eni"
@@ -1921,9 +1920,14 @@ func TestAgentAPIV1GetTaskProtectionHandler(t *testing.T) {
 	testAgentAPITaskProtectionV1Handler(t, nil, "GET")
 }
 
+type putTaskProtectionRequest struct {
+	ProtectionEnabled *bool  `json:"ProtectionEnabled"`
+	ExpiresInMinutes  *int64 `json:"ExpiresInMinutes,omitempty"`
+}
+
 // Tests that Agent API v1 UpdateTaskProtection handler is registered correctly
 func TestAgentAPIV1UpdateTaskProtectionHandler(t *testing.T) {
-	requestBody := tmdsAgentAPIv1.TaskProtectionRequest{
+	requestBody := putTaskProtectionRequest{
 		ProtectionEnabled: agentutils.BoolPtr(false),
 	}
 	testAgentAPITaskProtectionV1Handler(t, requestBody, "PUT")
