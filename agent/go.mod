@@ -26,7 +26,7 @@ require (
 	github.com/prometheus/client_golang v1.11.1
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.26.0
-	github.com/stretchr/testify v1.8.2
+	github.com/stretchr/testify v1.7.0
 	github.com/vishvananda/netlink v1.1.1-0.20201029203352-d40f9887b852
 	go.etcd.io/bbolt v1.3.5
 	golang.org/x/net v0.8.0
