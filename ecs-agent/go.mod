@@ -6,6 +6,7 @@ require (
 	github.com/aws/aws-sdk-go v1.36.0
 	github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575
 	github.com/didip/tollbooth v4.0.2+incompatible
+	github.com/golang/mock v1.4.1
 	github.com/gorilla/mux v1.8.0
 	github.com/stretchr/testify v1.8.2
 	golang.org/x/tools v0.6.0
