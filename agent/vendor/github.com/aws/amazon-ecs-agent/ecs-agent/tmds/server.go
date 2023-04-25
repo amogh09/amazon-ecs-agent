@@ -97,7 +97,7 @@ func NewServer(auditLogger audit.AuditLogger, options ...ConfigOpt) (*http.Serve
 
 func setup(auditLogger audit.AuditLogger, config Config) (*http.Server, error) {
 	if config.listenAddress == "" {
-		return nil, errors.New("listenAddress cannot empty")
+		return nil, errors.New("listenAddress cannot be empty")
 	}
 	if config.router == nil {
 		return nil, errors.New("router cannot be nil")

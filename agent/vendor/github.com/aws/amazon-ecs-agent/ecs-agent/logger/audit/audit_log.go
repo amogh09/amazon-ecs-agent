@@ -10,6 +10,9 @@
 // on an "as is" basis, without warranties or conditions of any kind, either
 // express or implied. see the license for the specific language governing
 // permissions and limitations under the license.
+
+//go:generate mockgen -destination=mocks/mock_audit_logger.go -copyright_file=../../../scripts/copyright_file . AuditLogger
+
 package audit
 
 import "github.com/aws/amazon-ecs-agent/ecs-agent/logger/audit/request"
