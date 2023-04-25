@@ -16,6 +16,8 @@
 
 package tools
 
+// Some packages are required by tools we use but are not used explicitly in the code.
+// Import those packages so that they are copied to the vendor directory by go mod.
 import (
 	_ "github.com/golang/mock/mockgen/model"
 )
