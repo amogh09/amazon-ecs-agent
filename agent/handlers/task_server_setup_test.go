@@ -35,12 +35,10 @@ import (
 	apitask "github.com/aws/amazon-ecs-agent/agent/api/task"
 	apitaskstatus "github.com/aws/amazon-ecs-agent/agent/api/task/status"
 	"github.com/aws/amazon-ecs-agent/agent/config"
-	"github.com/aws/amazon-ecs-agent/agent/containermetadata"
 	"github.com/aws/amazon-ecs-agent/agent/ecs_client/model/ecs"
 	mock_dockerstate "github.com/aws/amazon-ecs-agent/agent/engine/dockerstate/mocks"
 	task_protection_v1 "github.com/aws/amazon-ecs-agent/agent/handlers/agentapi/taskprotection/v1/handlers"
 	v1 "github.com/aws/amazon-ecs-agent/agent/handlers/v1"
-	v2 "github.com/aws/amazon-ecs-agent/agent/handlers/v2"
 	v3 "github.com/aws/amazon-ecs-agent/agent/handlers/v3"
 	v4 "github.com/aws/amazon-ecs-agent/agent/handlers/v4"
 	"github.com/aws/amazon-ecs-agent/agent/stats"
@@ -50,7 +48,9 @@ import (
 	"github.com/aws/amazon-ecs-agent/ecs-agent/credentials"
 	mock_credentials "github.com/aws/amazon-ecs-agent/ecs-agent/credentials/mocks"
 	mock_audit "github.com/aws/amazon-ecs-agent/ecs-agent/logger/audit/mocks"
+	tmdsresponse "github.com/aws/amazon-ecs-agent/ecs-agent/tmds/handlers/response"
 	"github.com/aws/amazon-ecs-agent/ecs-agent/tmds/handlers/utils"
+	tmdsv2 "github.com/aws/amazon-ecs-agent/ecs-agent/tmds/handlers/v2"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/docker/docker/api/types"
 	"github.com/golang/mock/gomock"
@@ -227,7 +227,7 @@ var (
 	labels = map[string]string{
 		"foo": "bar",
 	}
-	expectedContainerResponse = v2.ContainerResponse{
+	expectedContainerResponse = tmdsv2.ContainerResponse{
 		ID:            containerID,
 		Name:          containerName,
 		DockerName:    containerName,
@@ -235,47 +235,47 @@ var (
 		ImageID:       imageID,
 		DesiredStatus: statusRunning,
 		KnownStatus:   statusRunning,
-		Limits: v2.LimitsResponse{
+		Limits: tmdsv2.LimitsResponse{
 			CPU:    aws.Float64(cpu),
 			Memory: aws.Int64(memory),
 		},
 		Type:   containerType,
 		Labels: labels,
-		Ports: []v1.PortResponse{
+		Ports: []tmdsresponse.PortResponse{
 			{
 				ContainerPort: containerPort,
 				Protocol:      containerPortProtocol,
 				HostPort:      containerPort,
 			},
 		},
-		Networks: []containermetadata.Network{
+		Networks: []tmdsresponse.Network{
 			{
 				NetworkMode:   utils.NetworkModeAWSVPC,
 				IPv4Addresses: []string{eniIPv4Address},
 			},
 		},
 	}
-	expectedPulledContainerResponse = v2.ContainerResponse{
+	expectedPulledContainerResponse = tmdsv2.ContainerResponse{
 		Name:          pulledContainerName,
 		Image:         imageName,
 		ImageID:       imageID,
 		DesiredStatus: statusRunning,
 		KnownStatus:   statusPulled,
-		Limits: v2.LimitsResponse{
+		Limits: tmdsv2.LimitsResponse{
 			CPU:    aws.Float64(cpu),
 			Memory: aws.Int64(memory),
 		},
 		Type: containerType,
 	}
-	expectedTaskResponse = v2.TaskResponse{
+	expectedTaskResponse = tmdsv2.TaskResponse{
 		Cluster:       clusterName,
 		TaskARN:       taskARN,
 		Family:        family,
 		Revision:      version,
 		DesiredStatus: statusRunning,
 		KnownStatus:   statusRunning,
-		Containers:    []v2.ContainerResponse{expectedContainerResponse},
-		Limits: &v2.LimitsResponse{
+		Containers:    []tmdsv2.ContainerResponse{expectedContainerResponse},
+		Limits: &tmdsv2.LimitsResponse{
 			CPU:    aws.Float64(cpu),
 			Memory: aws.Int64(memory),
 		},
@@ -333,7 +333,7 @@ var (
 	containerNameToBridgeContainer = map[string]*apicontainer.DockerContainer{
 		taskARN: bridgeContainer,
 	}
-	expectedBridgeContainerResponse = v2.ContainerResponse{
+	expectedBridgeContainerResponse = tmdsv2.ContainerResponse{
 		ID:            containerID,
 		Name:          containerName,
 		DockerName:    containerName,
@@ -341,34 +341,34 @@ var (
 		ImageID:       imageID,
 		DesiredStatus: statusRunning,
 		KnownStatus:   statusRunning,
-		Limits: v2.LimitsResponse{
+		Limits: tmdsv2.LimitsResponse{
 			CPU:    aws.Float64(cpu),
 			Memory: aws.Int64(memory),
 		},
 		Type:   containerType,
 		Labels: labels,
-		Ports: []v1.PortResponse{
+		Ports: []tmdsresponse.PortResponse{
 			{
 				ContainerPort: containerPort,
 				Protocol:      containerPortProtocol,
 			},
 		},
-		Networks: []containermetadata.Network{
+		Networks: []tmdsresponse.Network{
 			{
 				NetworkMode:   bridgeMode,
 				IPv4Addresses: []string{bridgeIPAddr},
 			},
 		},
 	}
-	expectedBridgeTaskResponse = v2.TaskResponse{
+	expectedBridgeTaskResponse = tmdsv2.TaskResponse{
 		Cluster:       clusterName,
 		TaskARN:       taskARN,
 		Family:        family,
 		Revision:      version,
 		DesiredStatus: statusRunning,
 		KnownStatus:   statusRunning,
-		Containers:    []v2.ContainerResponse{expectedBridgeContainerResponse},
-		Limits: &v2.LimitsResponse{
+		Containers:    []tmdsv2.ContainerResponse{expectedBridgeContainerResponse},
+		Limits: &tmdsv2.LimitsResponse{
 			CPU:    aws.Float64(cpu),
 			Memory: aws.Int64(memory),
 		},
@@ -379,7 +379,7 @@ var (
 	}
 	attachmentIndexVar          = attachmentIndex
 	expectedV4ContainerResponse = v4.ContainerResponse{
-		ContainerResponse: &v2.ContainerResponse{
+		ContainerResponse: &tmdsv2.ContainerResponse{
 			ID:            containerID,
 			Name:          containerName,
 			DockerName:    containerName,
@@ -388,20 +388,20 @@ var (
 			DesiredStatus: statusRunning,
 			KnownStatus:   statusRunning,
 			ContainerARN:  "arn:aws:ecs:ap-northnorth-1:NNN:container/NNNNNNNN-aaaa-4444-bbbb-00000000000",
-			Limits: v2.LimitsResponse{
+			Limits: tmdsv2.LimitsResponse{
 				CPU:    aws.Float64(cpu),
 				Memory: aws.Int64(memory),
 			},
 			Type:   containerType,
 			Labels: labels,
-			Ports: []v1.PortResponse{
+			Ports: []tmdsresponse.PortResponse{
 				{
 					ContainerPort: containerPort,
 					Protocol:      containerPortProtocol,
 					HostPort:      containerPort,
 				},
 			},
-			Networks: []containermetadata.Network{
+			Networks: []tmdsresponse.Network{
 				{
 					NetworkMode:   utils.NetworkModeAWSVPC,
 					IPv4Addresses: []string{eniIPv4Address},
@@ -409,7 +409,7 @@ var (
 			},
 		},
 		Networks: []v4.Network{{
-			Network: containermetadata.Network{
+			Network: tmdsresponse.Network{
 				NetworkMode:   utils.NetworkModeAWSVPC,
 				IPv4Addresses: []string{eniIPv4Address},
 			},
@@ -423,14 +423,14 @@ var (
 		},
 	}
 	expectedV4PulledContainerResponse = v4.ContainerResponse{
-		ContainerResponse: &v2.ContainerResponse{
+		ContainerResponse: &tmdsv2.ContainerResponse{
 			Name:          pulledContainerName,
 			Image:         imageName,
 			ImageID:       imageID,
 			DesiredStatus: statusRunning,
 			KnownStatus:   statusPulled,
 			ContainerARN:  "arn:aws:ecs:ap-northnorth-1:NNN:container/NNNNNNNN-aaaa-4444-bbbb-00000000000",
-			Limits: v2.LimitsResponse{
+			Limits: tmdsv2.LimitsResponse{
 				CPU:    aws.Float64(cpu),
 				Memory: aws.Int64(memory),
 			},
@@ -438,15 +438,15 @@ var (
 		},
 	}
 	expectedV4TaskResponse = v4.TaskResponse{
-		TaskResponse: &v2.TaskResponse{
+		TaskResponse: &tmdsv2.TaskResponse{
 			Cluster:       clusterName,
 			TaskARN:       taskARN,
 			Family:        family,
 			Revision:      version,
 			DesiredStatus: statusRunning,
 			KnownStatus:   statusRunning,
-			Containers:    []v2.ContainerResponse{expectedContainerResponse},
-			Limits: &v2.LimitsResponse{
+			Containers:    []tmdsv2.ContainerResponse{expectedContainerResponse},
+			Limits: &tmdsv2.LimitsResponse{
 				CPU:    aws.Float64(cpu),
 				Memory: aws.Int64(memory),
 			},
@@ -460,15 +460,15 @@ var (
 		VPCID:      vpcID,
 	}
 	expectedV4PulledTaskResponse = v4.TaskResponse{
-		TaskResponse: &v2.TaskResponse{
+		TaskResponse: &tmdsv2.TaskResponse{
 			Cluster:       clusterName,
 			TaskARN:       taskARN,
 			Family:        family,
 			Revision:      version,
 			DesiredStatus: statusRunning,
 			KnownStatus:   statusNone,
-			Containers:    []v2.ContainerResponse{expectedContainerResponse, expectedPulledContainerResponse},
-			Limits: &v2.LimitsResponse{
+			Containers:    []tmdsv2.ContainerResponse{expectedContainerResponse, expectedPulledContainerResponse},
+			Limits: &tmdsv2.LimitsResponse{
 				CPU:    aws.Float64(cpu),
 				Memory: aws.Int64(memory),
 			},
@@ -484,7 +484,7 @@ var (
 	expectedV4BridgeContainerResponse = v4.ContainerResponse{
 		ContainerResponse: &expectedBridgeContainerResponse,
 		Networks: []v4.Network{{
-			Network: containermetadata.Network{
+			Network: tmdsresponse.Network{
 				NetworkMode:   bridgeMode,
 				IPv4Addresses: []string{bridgeIPAddr},
 			},
@@ -498,15 +498,15 @@ var (
 		},
 	}
 	expectedV4BridgeTaskResponse = v4.TaskResponse{
-		TaskResponse: &v2.TaskResponse{
+		TaskResponse: &tmdsv2.TaskResponse{
 			Cluster:       clusterName,
 			TaskARN:       taskARN,
 			Family:        family,
 			Revision:      version,
 			DesiredStatus: statusRunning,
 			KnownStatus:   statusRunning,
-			Containers:    []v2.ContainerResponse{expectedBridgeContainerResponse},
-			Limits: &v2.LimitsResponse{
+			Containers:    []tmdsv2.ContainerResponse{expectedBridgeContainerResponse},
+			Limits: &tmdsv2.LimitsResponse{
 				CPU:    aws.Float64(cpu),
 				Memory: aws.Int64(memory),
 			},
@@ -783,7 +783,7 @@ func TestV2TaskMetadata(t *testing.T) {
 			res, err := ioutil.ReadAll(recorder.Body)
 			assert.NoError(t, err)
 			assert.Equal(t, http.StatusOK, recorder.Code)
-			var taskResponse v2.TaskResponse
+			var taskResponse tmdsv2.TaskResponse
 			err = json.Unmarshal(res, &taskResponse)
 			assert.NoError(t, err)
 			assert.Equal(t, expectedTaskResponse, taskResponse)
@@ -870,7 +870,7 @@ func TestV2TaskWithTagsMetadata(t *testing.T) {
 			res, err := ioutil.ReadAll(recorder.Body)
 			assert.NoError(t, err)
 			assert.Equal(t, http.StatusOK, recorder.Code)
-			var taskResponse v2.TaskResponse
+			var taskResponse tmdsv2.TaskResponse
 			err = json.Unmarshal(res, &taskResponse)
 			assert.NoError(t, err)
 			assert.Equal(t, expectedTaskResponseWithTags, taskResponse)
@@ -904,7 +904,7 @@ func TestV2ContainerMetadata(t *testing.T) {
 	res, err := ioutil.ReadAll(recorder.Body)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, recorder.Code)
-	var containerResponse v2.ContainerResponse
+	var containerResponse tmdsv2.ContainerResponse
 	err = json.Unmarshal(res, &containerResponse)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedContainerResponse, containerResponse)
@@ -1022,7 +1022,7 @@ func TestV3TaskMetadata(t *testing.T) {
 	res, err := ioutil.ReadAll(recorder.Body)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, recorder.Code)
-	var taskResponse v2.TaskResponse
+	var taskResponse tmdsv2.TaskResponse
 	err = json.Unmarshal(res, &taskResponse)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedTaskResponse, taskResponse)
@@ -1054,7 +1054,7 @@ func TestV3BridgeTaskMetadata(t *testing.T) {
 	res, err := ioutil.ReadAll(recorder.Body)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, recorder.Code)
-	var taskResponse v2.TaskResponse
+	var taskResponse tmdsv2.TaskResponse
 	err = json.Unmarshal(res, &taskResponse)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedBridgeTaskResponse, taskResponse)
@@ -1085,7 +1085,7 @@ func TestV3BridgeContainerMetadata(t *testing.T) {
 	res, err := ioutil.ReadAll(recorder.Body)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, recorder.Code)
-	var containerResponse v2.ContainerResponse
+	var containerResponse tmdsv2.ContainerResponse
 	err = json.Unmarshal(res, &containerResponse)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedBridgeContainerResponse, containerResponse)
@@ -1158,7 +1158,7 @@ func TestV3TaskMetadataWithTags(t *testing.T) {
 	res, err := ioutil.ReadAll(recorder.Body)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, recorder.Code)
-	var taskResponse v2.TaskResponse
+	var taskResponse tmdsv2.TaskResponse
 	err = json.Unmarshal(res, &taskResponse)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedTaskResponseWithTags, taskResponse)
@@ -1188,7 +1188,7 @@ func TestV3ContainerMetadata(t *testing.T) {
 	res, err := ioutil.ReadAll(recorder.Body)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, recorder.Code)
-	var containerResponse v2.ContainerResponse
+	var containerResponse tmdsv2.ContainerResponse
 	err = json.Unmarshal(res, &containerResponse)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedContainerResponse, containerResponse)
@@ -1425,7 +1425,7 @@ func TestV4ContainerMetadata(t *testing.T) {
 	err = json.Unmarshal(res, &containerResponse)
 	assert.NoError(t, err)
 
-	// v4.ContainerMetadata overrides Networks properties defined in v2.ContainerResponse
+	// v4.ContainerMetadata overrides Networks properties defined in tmdsv2.ContainerResponse
 	// during json.Unmarshal(), values for the Networks property will be written to v4.ContainerMetadata.Networks
 	// instead of v4.ContainerMetadata.(v2.ContainerMetadata).Networks
 	// v2.ContainerMetadata.Networks should be nil
