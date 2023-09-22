@@ -607,6 +607,7 @@ func (agent *ecsAgent) newTaskEngine(containerChangeEventStream *eventstream.Eve
 		currentEC2InstanceID = savedData.ec2InstanceID
 		seelog.Warnf("Not able to get EC2 Instance ID from IMDS, using EC2 Instance ID from saved state: '%s'", currentEC2InstanceID)
 	}
+	seelog.Infof("ec2 instance id is %s", currentEC2InstanceID)
 	if savedData.ec2InstanceID != "" && savedData.ec2InstanceID != currentEC2InstanceID {
 		seelog.Warnf(instanceIDMismatchErrorFormat,
 			savedData.ec2InstanceID, currentEC2InstanceID)

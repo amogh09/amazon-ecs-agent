@@ -44,12 +44,15 @@ func (engine *DockerTaskEngine) LoadState() error {
 }
 
 func (engine *DockerTaskEngine) loadTasks() error {
+	seelog.Info("loading tasks from data client")
 	tasks, err := engine.dataClient.GetTasks()
 	if err != nil {
 		return err
 	}
+	seelog.Infof("loaded %d tasks from data client", len(tasks))
 
 	for _, task := range tasks {
+		seelog.Infof("loaded task %s from data client", task.Arn)
 		engine.state.AddTask(task)
 
 		// Populate ip <-> task mapping if task has a local ip. This mapping is needed for serving v2 task metadata.
@@ -61,12 +64,15 @@ func (engine *DockerTaskEngine) loadTasks() error {
 }
 
 func (engine *DockerTaskEngine) loadContainers() error {
+	seelog.Info("loading containers from data client")
 	containers, err := engine.dataClient.GetContainers()
 	if err != nil {
 		return err
 	}
+	seelog.Infof("loaded %d containers from data client", len(containers))
 
 	for _, container := range containers {
+		seelog.Infof("loaded container %s from data client", container.Container.Name)
 		task, ok := engine.state.TaskByArn(container.Container.GetTaskARN())
 		if !ok {
 			// A task is saved to task table before its containers saved to container table. It is not expected
@@ -207,27 +213,30 @@ func (engine *DockerTaskEngine) saveDockerContainerData(container *apicontainer.
 }
 
 func (engine *DockerTaskEngine) removeTaskData(task *apitask.Task) {
-	id, err := utils.GetTaskID(task.Arn)
-	if err != nil {
-		seelog.Errorf("Failed to get task id from task ARN %s: %v", task.Arn, err)
-		return
-	}
-	err = engine.dataClient.DeleteTask(id)
-	if err != nil {
-		seelog.Errorf("Failed to remove data for task %s: %v", task.Arn, err)
-	}
-
+	seelog.Infof("Removing task data for %s", task.Arn)
 	for _, c := range task.Containers {
 		id, err := data.GetContainerID(c)
 		if err != nil {
 			seelog.Errorf("Failed to get container id from container %s: %v", c.Name, err)
 			continue
 		}
+		seelog.Infof("Deleting container %s from DB", id)
 		err = engine.dataClient.DeleteContainer(id)
 		if err != nil {
 			seelog.Errorf("Failed to remove data for container %s: %v", c.Name, err)
 		}
 	}
+
+	// id, err := utils.GetTaskID(task.Arn)
+	// if err != nil {
+	// 	seelog.Errorf("Failed to get task id from task ARN %s: %v", task.Arn, err)
+	// 	return
+	// }
+	// err = engine.dataClient.DeleteTask(id)
+	// if err != nil {
+	// 	seelog.Errorf("Failed to remove data for task %s: %v", task.Arn, err)
+	// }
+
 }
 
 func (engine *DockerTaskEngine) removeENIAttachmentData(mac string) {
