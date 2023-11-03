@@ -36,9 +36,9 @@ jobs:
           cd $GITHUB_WORKSPACE/src/github.com/aws/amazon-ecs-agent/agent
           go mod tidy
           go mod vendor
-      - name: Submit a PR if there is a diff
-        uses: peter-evans/create-pull-request@v5
-        path: src/github.com/aws/amazon-ecs-agent
-        base: dev
-        branch: agent-gomod-sync
-        delete-branch: true
+      # - name: Submit a PR if there is a diff
+      #   uses: peter-evans/create-pull-request@v5
+      #   path: src/github.com/aws/amazon-ecs-agent
+      #   base: dev
+      #   branch: agent-gomod-sync
+      #   delete-branch: true
