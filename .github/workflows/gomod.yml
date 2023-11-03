@@ -1,17 +1,19 @@
-name: Go Mod Check
+name: agent module go mod tidy & vendor
 
-on: [push, pull_request]
-
-permissions: read-all
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
-          submodules: true
           path: src/github.com/aws/amazon-ecs-agent
+          ref: dev
       - name: get GO_VERSION
         id: get-go-version
         run: |
@@ -29,24 +31,14 @@ jobs:
       - uses: actions/setup-go@v3
         with:
           go-version: ${{ steps.get-go-version.outputs.GO_VERSION }}
-      - name: Run go mod tidy and go mod vendor in ecs-agent module
-        run: |
-          cd $GITHUB_WORKSPACE/src/github.com/aws/amazon-ecs-agent/ecs-agent
-          go mod tidy
-          git diff --exit-code go.mod go.sum
-          go mod vendor
-          git diff --exit-code vendor/
       - name: Run go mod tidy and go mod vendor in agent module
         run: |
           cd $GITHUB_WORKSPACE/src/github.com/aws/amazon-ecs-agent/agent
           go mod tidy
-          git diff --exit-code go.mod go.sum
           go mod vendor
-          git diff --exit-code vendor/
-      - name: Run go mod tidy and go mod vendor in ecs-init module
-        run: |
-          cd $GITHUB_WORKSPACE/src/github.com/aws/amazon-ecs-agent/ecs-init
-          go mod tidy
-          git diff --exit-code go.mod go.sum
-          go mod vendor
-          git diff --exit-code vendor/
+      - name: Submit a PR if there is a diff
+        uses: peter-evans/create-pull-request@v5
+        path: src/github.com/aws/amazon-ecs-agent
+        base: dev
+        branch: agent-gomod-sync
+        delete-branch: true
