@@ -91,11 +91,22 @@ func setOptions(options map[string]string) *MountHelper {
 	return mnt
 }
 
-// Remove implements ECSVolumeDriver's Remove volume method
-func (e *ECSVolumeDriver) Remove(req *RemoveRequest) error {
+func (e *ECSVolumeDriver) getVolumeMount(key string) (*MountHelper, bool) {
+	e.lock.RLock()
+	defer e.lock.RUnlock()
+	mh, ok := e.volumeMounts[key]
+	return mh, ok
+}
+
+func (e *ECSVolumeDriver) deleteVolumeMount(key string) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
-	mnt, ok := e.volumeMounts[req.Name]
+	delete(e.volumeMounts, key)
+}
+
+// Remove implements ECSVolumeDriver's Remove volume method
+func (e *ECSVolumeDriver) Remove(req *RemoveRequest) error {
+	mnt, ok := e.getVolumeMount(req.Name)
 	if !ok {
 		return fmt.Errorf("volume not found")
 	}
@@ -111,7 +122,7 @@ func (e *ECSVolumeDriver) Remove(req *RemoveRequest) error {
 	if err != nil {
 		seelog.Errorf("Unmount failed but returning no error anyway: %v", err)
 	}
-	delete(e.volumeMounts, req.Name)
+	e.deleteVolumeMount(req.Name)
 	seelog.Infof("Unmounted volume %s successfully.", req.Name)
 	return nil
 }

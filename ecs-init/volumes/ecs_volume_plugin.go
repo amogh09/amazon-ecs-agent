@@ -313,8 +313,11 @@ func (a *AmazonECSVolumePlugin) Remove(r *volume.RemoveRequest) error {
 func (a *AmazonECSVolumePlugin) List() (*volume.ListResponse, error) {
 	seelog.Info("Trying to acquire read lock for List request")
 	a.lock.RLock()
-	seelog.Info("Acquire read lock for List request")
-	defer a.lock.RUnlock()
+	seelog.Info("Acquired read lock for List request")
+	defer func() {
+		a.lock.RUnlock()
+		seelog.Infof("List request lock released. Request finished.")
+	}()
 	vols := make([]*volume.Volume, len(a.volumes))
 	i := 0
 	for volName := range a.volumes {
