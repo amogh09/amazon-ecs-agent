@@ -62,6 +62,9 @@ func NewStateManager() *StateManager {
 }
 
 func (s *StateManager) recordVolume(volName string, vol *Volume) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	s.VolState.Volumes[volName] = &VolumeInfo{
 		Type:      vol.Type,
 		Path:      vol.Path,
@@ -72,15 +75,15 @@ func (s *StateManager) recordVolume(volName string, vol *Volume) error {
 }
 
 func (s *StateManager) removeVolume(volName string) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	delete(s.VolState.Volumes, volName)
 	return s.save()
 }
 
 // saves volume state to the file at path
 func (s *StateManager) save() error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
 	b, err := json.MarshalIndent(s.VolState, "", "\t")
 	if err != nil {
 		return fmt.Errorf("marshal data failed: %v", err)

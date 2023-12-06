@@ -15,7 +15,6 @@ package volumes
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/cihub/seelog"
@@ -101,15 +100,18 @@ func (e *ECSVolumeDriver) Remove(req *RemoveRequest) error {
 		return fmt.Errorf("volume not found")
 	}
 	err := mnt.Unmount()
+	// if err != nil {
+	// 	if strings.Contains(err.Error(), notMountedErrMsg) {
+	// 		seelog.Infof("Unmounting volume %s failed because it's not mounted.", req.Name)
+	// 		delete(e.volumeMounts, req.Name)
+	// 		return nil
+	// 	}
+	// 	return fmt.Errorf("unmounting volume failed: %v", err)
+	// }
 	if err != nil {
-		if strings.Contains(err.Error(), notMountedErrMsg) {
-			seelog.Infof("Unmounting volume %s failed because it's not mounted.", req.Name)
-			delete(e.volumeMounts, req.Name)
-			return nil
-		}
-		return fmt.Errorf("unmounting volume failed: %v", err)
+		seelog.Errorf("Unmount failed but returning no error anyway: %v", err)
 	}
 	delete(e.volumeMounts, req.Name)
 	seelog.Infof("Unmounted volume %s successfully.", req.Name)
-	return err
+	return nil
 }

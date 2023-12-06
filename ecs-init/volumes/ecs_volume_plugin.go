@@ -248,12 +248,23 @@ func (a *AmazonECSVolumePlugin) Unmount(r *volume.UnmountRequest) error {
 	return nil
 }
 
-// Remove implements Docker volume plugin's Remove Method
-func (a *AmazonECSVolumePlugin) Remove(r *volume.RemoveRequest) error {
+func (a *AmazonECSVolumePlugin) getVolume(key string) (*Volume, bool) {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+	v, ok := a.volumes[key]
+	return v, ok
+}
+
+func (a *AmazonECSVolumePlugin) deleteVolume(key string) {
 	a.lock.Lock()
 	defer a.lock.Unlock()
+	delete(a.volumes, key)
+}
+
+// Remove implements Docker volume plugin's Remove Method
+func (a *AmazonECSVolumePlugin) Remove(r *volume.RemoveRequest) error {
 	seelog.Infof("Removing volume %s", r.Name)
-	vol, ok := a.volumes[r.Name]
+	vol, ok := a.getVolume(r.Name)
 	if !ok {
 		seelog.Errorf("Volume %s to remove is not found", r.Name)
 		return fmt.Errorf("volume %s not found", r.Name)
@@ -280,7 +291,7 @@ func (a *AmazonECSVolumePlugin) Remove(r *volume.RemoveRequest) error {
 	}
 
 	// remove the volume information
-	delete(a.volumes, r.Name)
+	a.deleteVolume(r.Name)
 	// cleanup the volume's host mount path
 	err = a.CleanupMountPath(vol.Path)
 	if err != nil {
