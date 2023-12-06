@@ -285,6 +285,10 @@ func (mtask *managedTask) resourceTaskStopHook() {
 				})
 			continue
 		}
+		logger.Debug("Starting pre task network teardown hook", logger.Fields{
+			field.TaskID:   task.GetID(),
+			field.Resource: resource.GetName(),
+		})
 		err := resource.PreTaskNetworkTeardownHook()
 		if err != nil {
 			logger.Warn("Resource's task stop hook failed", logger.Fields{
