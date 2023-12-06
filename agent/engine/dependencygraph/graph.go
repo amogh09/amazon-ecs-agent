@@ -215,7 +215,7 @@ func verifyContainerDependenciesResolvedForResource(target taskresource.TaskReso
 	// For task resource without dependency map, containerDependencies will just be nil
 	containerDependencies := target.GetContainerDependencies(targetNext)
 	logger.Info("verifying if resource's container dependencies is resolved", logger.Fields{
-		field.Resource:          target,
+		field.Resource:          target.GetName(),
 		"nextState":             targetNext,
 		"containerDependencies": containerDependencies,
 	})
