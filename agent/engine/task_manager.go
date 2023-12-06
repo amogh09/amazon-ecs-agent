@@ -1436,9 +1436,13 @@ func (mtask *managedTask) resourceNextState(resource taskresource.TaskResource) 
 	if resource.DesiredTerminal() {
 		nextState := resource.TerminalStatus()
 		return &resourceTransition{
-			nextState:      nextState,
-			status:         resource.StatusString(nextState),
-			actionRequired: false, // Resource cleanup is done while cleaning up task, so not doing anything here.
+			nextState: nextState,
+			status:    resource.StatusString(nextState),
+			// If the resource depends on task network then we need to take action to
+			// clean it up before the task networking is torn down.
+			// For resources with no dependency on task network, the cleanup will be peformed
+			// during task cleanup.
+			actionRequired: !resource.DependOnTaskNetwork(),
 		}
 	}
 	nextState = resource.NextKnownState()

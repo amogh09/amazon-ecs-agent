@@ -216,6 +216,7 @@ func verifyContainerDependenciesResolvedForResource(target taskresource.TaskReso
 	containerDependencies := target.GetContainerDependencies(targetNext)
 	logger.Info("verifying if resource's container dependencies is resolved", logger.Fields{
 		field.Resource:          target.GetName(),
+		"knownStatus":           target.GetKnownStatus(),
 		"nextState":             targetNext,
 		"containerDependencies": containerDependencies,
 	})

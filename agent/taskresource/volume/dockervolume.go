@@ -148,6 +148,7 @@ func (vol *VolumeResource) Initialize(resourceFields *taskresource.ResourceField
 func (vol *VolumeResource) initStatusToTransitions() {
 	statusToTransitions := map[resourcestatus.ResourceStatus]func() error{
 		resourcestatus.ResourceStatus(VolumeCreated): vol.Create,
+		resourcestatus.ResourceStatus(VolumeRemoved): vol.PreTaskNetworkTeardownHook,
 	}
 
 	vol.statusToTransitions = statusToTransitions
