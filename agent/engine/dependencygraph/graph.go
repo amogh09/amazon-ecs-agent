@@ -22,6 +22,7 @@ import (
 	apitask "github.com/aws/amazon-ecs-agent/agent/api/task"
 	"github.com/aws/amazon-ecs-agent/agent/config"
 	"github.com/aws/amazon-ecs-agent/agent/taskresource"
+	resourcestatus "github.com/aws/amazon-ecs-agent/agent/taskresource/status"
 	apicontainerstatus "github.com/aws/amazon-ecs-agent/ecs-agent/api/container/status"
 	"github.com/aws/amazon-ecs-agent/ecs-agent/credentials"
 	"github.com/aws/amazon-ecs-agent/ecs-agent/logger"
@@ -180,7 +181,7 @@ func DependenciesAreResolved(target *apicontainer.Container,
 	// If the target is desired terminal and isn't stopped, we should validate that it doesn't have any containers
 	// that are dependent on it that need to shut down first.
 	if target.DesiredTerminal() && !target.KnownTerminal() {
-		if err := verifyShutdownOrder(target, nameMap); err != nil {
+		if err := verifyShutdownOrder(target, nameMap, resourcesMap); err != nil {
 			return nil, err
 		}
 	}
@@ -506,7 +507,10 @@ func verifyContainerOrderingStatus(dependsOnContainer *apicontainer.Container) b
 		dependsOnContainerDesiredStatus == dependsOnContainer.GetSteadyStateStatus()
 }
 
-func verifyShutdownOrder(target *apicontainer.Container, existingContainers map[string]*apicontainer.Container) DependencyError {
+func verifyShutdownOrder(
+	target *apicontainer.Container, existingContainers map[string]*apicontainer.Container,
+	existingResources map[string]taskresource.TaskResource,
+) DependencyError {
 	// We considered adding this to the task state, but this will be at most 45 loops,
 	// so we err'd on the side of having less state.
 	missingShutdownDependencies := []string{}
@@ -524,12 +528,34 @@ func verifyShutdownOrder(target *apicontainer.Container, existingContainers map[
 		}
 	}
 
+	for _, resource := range existingResources {
+		resourceDeps := resource.GetContainerDependencies(resourcestatus.ResourceCreated)
+		for _, dep := range resourceDeps {
+			if target.Name == dep.ContainerName {
+				logger.Debug("Resource creation depended on target container", logger.Fields{
+					"target":         target.Name,
+					field.Resource:   resource.GetName(),
+					"resourceStatus": resource.GetKnownStatus(),
+				})
+			}
+			if target.Name == dep.ContainerName && resource.GetKnownStatus() < resourcestatus.ResourceRemoved {
+				// Resource creation depends on target container creation, so the inverse
+				// is true for resource removal, that is, target container's stop depends
+				// on resource removal.
+				missingShutdownDependencies = append(missingShutdownDependencies, resource.GetName())
+			}
+		}
+	}
+
 	if len(missingShutdownDependencies) == 0 {
 		return nil
 	}
 
-	return &dependencyError{err: fmt.Errorf("dependency graph: target %s needs other containers stopped before it can stop: [%s]",
-		target.Name, strings.Join(missingShutdownDependencies, "], ["))}
+	return &dependencyError{
+		err: fmt.Errorf(
+			"dependency graph: target %s needs other containers or resources stopped before it can stop: [%s]",
+
+			target.Name, strings.Join(missingShutdownDependencies, "], ["))}
 }
 
 func onSteadyStateCanResolve(target *apicontainer.Container, run *apicontainer.Container) bool {

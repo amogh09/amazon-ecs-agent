@@ -250,7 +250,7 @@ func (mtask *managedTask) overseeTask() {
 		field.TaskID: mtask.GetID(),
 	})
 
-	mtask.resourceTaskStopHook()
+	// mtask.resourceTaskStopHook()
 	mtask.engine.checkTearDownPauseContainer(mtask.Task)
 	// TODO [SC]: We need to also tear down pause containets in bridge mode for SC-enabled tasks
 	mtask.cleanupCredentials()
@@ -1234,6 +1234,13 @@ func (mtask *managedTask) startResourceTransitions(transitionFunc resourceTransi
 			continue
 		}
 		if !transition.actionRequired {
+			logger.Debug("Action not required for resource transition", logger.Fields{
+				field.TaskID:        mtask.GetID(),
+				field.Resource:      res.GetName(),
+				field.KnownStatus:   res.StatusString(knownStatus),
+				field.DesiredStatus: res.StatusString(desiredStatus),
+				"nextState":         transition.nextState,
+			})
 			// no action is required for the transition, just set the known status without
 			// calling any transition function
 			go mtask.emitResourceChange(resourceStateChange{
@@ -1442,7 +1449,7 @@ func (mtask *managedTask) resourceNextState(resource taskresource.TaskResource) 
 			// clean it up before the task networking is torn down.
 			// For resources with no dependency on task network, the cleanup will be peformed
 			// during task cleanup.
-			actionRequired: !resource.DependOnTaskNetwork(),
+			actionRequired: resource.DependOnTaskNetwork(),
 		}
 	}
 	nextState = resource.NextKnownState()

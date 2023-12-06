@@ -28,6 +28,8 @@ import (
 	volumepluginclient "github.com/aws/amazon-ecs-agent/agent/taskresource/volume/client"
 	apicontainerstatus "github.com/aws/amazon-ecs-agent/ecs-agent/api/container/status"
 	"github.com/aws/amazon-ecs-agent/ecs-agent/api/task/status"
+	"github.com/aws/amazon-ecs-agent/ecs-agent/logger"
+	"github.com/aws/amazon-ecs-agent/ecs-agent/logger/field"
 	"github.com/cihub/seelog"
 	"github.com/pkg/errors"
 )
@@ -406,6 +408,9 @@ func (vol *VolumeResource) PreTaskNetworkTeardownHook() error {
 	if vol.VolumeConfig.Driver != ECSVolumePlugin {
 		return nil
 	}
+	logger.Debug("Starting pre task network teardown for volume resource", logger.Fields{
+		field.Resource: vol.GetName(),
+	})
 	ctx, cancel := context.WithTimeout(vol.ctx, dockerclient.RemoveVolumeTimeout)
 	defer cancel()
 	err := vol.volumePluginClient.Remove(ctx, vol.VolumeConfig.DockerVolumeName)
