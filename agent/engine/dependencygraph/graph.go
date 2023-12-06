@@ -24,6 +24,8 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 	apicontainerstatus "github.com/aws/amazon-ecs-agent/ecs-agent/api/container/status"
 	"github.com/aws/amazon-ecs-agent/ecs-agent/credentials"
+	"github.com/aws/amazon-ecs-agent/ecs-agent/logger"
+	"github.com/aws/amazon-ecs-agent/ecs-agent/logger/field"
 	log "github.com/cihub/seelog"
 	"github.com/pkg/errors"
 )
@@ -212,6 +214,11 @@ func verifyContainerDependenciesResolvedForResource(target taskresource.TaskReso
 	targetNext := target.NextKnownState()
 	// For task resource without dependency map, containerDependencies will just be nil
 	containerDependencies := target.GetContainerDependencies(targetNext)
+	logger.Info("verifying if resource's container dependencies is resolved", logger.Fields{
+		field.Resource:          target,
+		"nextState":             targetNext,
+		"containerDependencies": containerDependencies,
+	})
 	for _, containerDependency := range containerDependencies {
 		dep, exists := existingContainers[containerDependency.ContainerName]
 		if !exists {
