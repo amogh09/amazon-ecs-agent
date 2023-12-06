@@ -423,6 +423,10 @@ func (envfile *EnvironmentFileResource) writeEnvFile(writeFunc func(file oswrapp
 
 var removeAll = os.RemoveAll
 
+func (envfile *EnvironmentFileResource) PreTaskNetworkTeardownHook() error {
+	return nil
+}
+
 // Cleanup removes env file directory for the task
 func (envfile *EnvironmentFileResource) Cleanup() error {
 	err := removeAll(envfile.resourceDir)

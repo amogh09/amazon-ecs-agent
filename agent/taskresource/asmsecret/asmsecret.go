@@ -402,6 +402,10 @@ func (secret *ASMSecretResource) getExecutionCredentialsID() string {
 	return secret.executionCredentialsID
 }
 
+func (secret *ASMSecretResource) PreTaskNetworkTeardownHook() error {
+	return nil
+}
+
 // Cleanup removes the secret value created for the task
 func (secret *ASMSecretResource) Cleanup() error {
 	secret.clearASMSecretValue()

@@ -164,6 +164,10 @@ func (fv *FSxWindowsFileServerResource) Create() error {
 	return errors.New("not supported")
 }
 
+func (fv *FSxWindowsFileServerResource) PreTaskNetworkTeardownHook() error {
+	return nil
+}
+
 // Cleanup removes the fsxwindowsfileserver resources created for the task
 func (fv *FSxWindowsFileServerResource) Cleanup() error {
 	return errors.New("not supported")

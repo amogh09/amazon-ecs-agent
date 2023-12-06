@@ -297,6 +297,10 @@ func (cgroup *CgroupResource) setupTaskCgroup() error {
 	return nil
 }
 
+func (cgroup *CgroupResource) PreTaskNetworkTeardownHook() error {
+	return nil
+}
+
 // Cleanup removes the cgroup root created for the task
 func (cgroup *CgroupResource) Cleanup() error {
 	err := cgroup.control.Remove(cgroup.cgroupRoot)

@@ -548,6 +548,10 @@ func (firelens *FirelensResource) writeConfigFile(writeFunc func(file oswrapper.
 
 var removeAll = os.RemoveAll
 
+func (firelens *FirelensResource) PreTaskNetworkTeardownHook() error {
+	return nil
+}
+
 // Cleanup performs resource cleanup.
 func (firelens *FirelensResource) Cleanup() error {
 	err := removeAll(firelens.resourceDir)

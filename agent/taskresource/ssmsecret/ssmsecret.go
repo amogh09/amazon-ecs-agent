@@ -368,6 +368,10 @@ func (secret *SSMSecretResource) getExecutionCredentialsID() string {
 	return secret.executionCredentialsID
 }
 
+func (secret *SSMSecretResource) PreTaskNetworkTeardownHook() error {
+	return nil
+}
+
 // Cleanup removes the secret value created for the task
 func (secret *SSMSecretResource) Cleanup() error {
 	secret.clearSSMSecretValue()

@@ -249,6 +249,7 @@ func (mtask *managedTask) overseeTask() {
 	logger.Info("Managed task has reached stopped; waiting for container cleanup", logger.Fields{
 		field.TaskID: mtask.GetID(),
 	})
+
 	mtask.engine.checkTearDownPauseContainer(mtask.Task)
 	// TODO [SC]: We need to also tear down pause containets in bridge mode for SC-enabled tasks
 	mtask.cleanupCredentials()
@@ -266,6 +267,34 @@ func (mtask *managedTask) overseeTask() {
 	}
 
 	mtask.cleanupTask(retry.AddJitter(mtask.cfg.TaskCleanupWaitDuration, mtask.cfg.TaskCleanupWaitDurationJitter))
+}
+
+func (mtask *managedTask) resourceTaskStopHook() {
+	task := mtask.Task
+	for _, resource := range task.GetResources() {
+		if !resource.DependOnTaskNetwork() {
+			logger.Debug(
+				"Resource does not depend on task network so skipping network dependent cleanup",
+				logger.Fields{
+					field.TaskID:   task.GetID(),
+					field.Resource: resource.GetName(),
+				})
+			continue
+		}
+		err := resource.PreTaskNetworkTeardownHook()
+		if err != nil {
+			logger.Warn("Resource's task stop hook failed", logger.Fields{
+				field.TaskID:   task.GetID(),
+				field.Resource: resource.GetName(),
+				field.Error:    err,
+			})
+		} else {
+			logger.Info("Resource's task stop hook succeeded", logger.Fields{
+				field.TaskID:   task.GetID(),
+				field.Resource: resource.GetName(),
+			})
+		}
+	}
 }
 
 // shouldExit checks if the task manager should exit, as the agent is exiting.

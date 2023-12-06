@@ -268,7 +268,7 @@ func (a *AmazonECSVolumePlugin) Remove(r *volume.RemoveRequest) error {
 	seelog.Infof("Found volume for %s. No lock held.", r.Name)
 	if !ok {
 		seelog.Errorf("Volume %s to remove is not found", r.Name)
-		return fmt.Errorf("volume %s not found", r.Name)
+		return nil
 	}
 
 	// get corresponding volume driver to unmount

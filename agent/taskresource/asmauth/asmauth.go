@@ -309,6 +309,10 @@ func (auth *ASMAuthResource) GetExecutionCredentialsID() string {
 	return auth.executionCredentialsID
 }
 
+func (auth *ASMAuthResource) PreTaskNetworkTeardownHook() error {
+	return nil
+}
+
 // Cleanup removes the asm auth resource created for the task
 func (auth *ASMAuthResource) Cleanup() error {
 	auth.clearASMDockerAuthConfig()

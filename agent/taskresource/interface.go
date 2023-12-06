@@ -39,6 +39,8 @@ type TaskResource interface {
 	GetCreatedAt() time.Time
 	// Create performs resource creation
 	Create() error
+	// Called for task network dependent resources before task network is torn down after task stop.
+	PreTaskNetworkTeardownHook() error
 	// Cleanup performs resource cleanup
 	Cleanup() error
 	// GetName returns the unique name of the resource

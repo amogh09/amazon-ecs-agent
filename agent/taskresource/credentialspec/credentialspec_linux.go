@@ -570,6 +570,10 @@ func (cs *CredentialSpecResource) UpdateRegionFromTask() error {
 	return nil
 }
 
+func (cs *CredentialSpecResource) PreTaskNetworkTeardownHook() error {
+	return nil
+}
+
 // Cleanup removes the credentialSpec created for the task
 func (cs *CredentialSpecResource) Cleanup() error {
 	cs.clearKerberosTickets()

@@ -25,6 +25,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/dockerclient/dockerapi"
 	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 	resourcestatus "github.com/aws/amazon-ecs-agent/agent/taskresource/status"
+	volumepluginclient "github.com/aws/amazon-ecs-agent/agent/taskresource/volume/client"
 	apicontainerstatus "github.com/aws/amazon-ecs-agent/ecs-agent/api/container/status"
 	"github.com/aws/amazon-ecs-agent/ecs-agent/api/task/status"
 	"github.com/cihub/seelog"
@@ -66,6 +67,7 @@ type VolumeResource struct {
 	appliedStatusUnsafe resourcestatus.ResourceStatus
 	statusToTransitions map[resourcestatus.ResourceStatus]func() error
 	client              dockerapi.DockerClient
+	volumePluginClient  volumepluginclient.VolumePluginClient
 	ctx                 context.Context
 
 	// TransitionDependenciesMap is a map of the dependent container status to other
@@ -126,6 +128,7 @@ func NewVolumeResource(ctx context.Context,
 			DockerVolumeName: dockerVolumeName,
 		},
 		client:                    client,
+		volumePluginClient:        volumepluginclient.NewVolumePluginClient(),
 		ctx:                       ctx,
 		transitionDependenciesMap: make(map[resourcestatus.ResourceStatus]taskresource.TransitionDependencySet),
 	}
@@ -396,6 +399,19 @@ func (vol *VolumeResource) getDriverOpts() map[string]string {
 		opts["o"] = mntOpt.String()
 	}
 	return opts
+}
+
+func (vol *VolumeResource) PreTaskNetworkTeardownHook() error {
+	if vol.VolumeConfig.Driver != ECSVolumePlugin {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(vol.ctx, dockerclient.RemoveVolumeTimeout)
+	defer cancel()
+	err := vol.volumePluginClient.Remove(ctx, vol.VolumeConfig.DockerVolumeName)
+	if err != nil {
+		return fmt.Errorf("failed to remove volume %s: %w", vol.VolumeConfig.DockerVolumeName, err)
+	}
+	return nil
 }
 
 // Cleanup performs resource cleanup
