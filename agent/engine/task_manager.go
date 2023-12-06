@@ -250,6 +250,7 @@ func (mtask *managedTask) overseeTask() {
 		field.TaskID: mtask.GetID(),
 	})
 
+	mtask.resourceTaskStopHook()
 	mtask.engine.checkTearDownPauseContainer(mtask.Task)
 	// TODO [SC]: We need to also tear down pause containets in bridge mode for SC-enabled tasks
 	mtask.cleanupCredentials()
@@ -271,6 +272,9 @@ func (mtask *managedTask) overseeTask() {
 
 func (mtask *managedTask) resourceTaskStopHook() {
 	task := mtask.Task
+	logger.Info("Starting task network dependent task stop processing of resources", logger.Fields{
+		field.TaskID: task.GetID(),
+	})
 	for _, resource := range task.GetResources() {
 		if !resource.DependOnTaskNetwork() {
 			logger.Debug(
