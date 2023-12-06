@@ -265,6 +265,7 @@ func (a *AmazonECSVolumePlugin) deleteVolume(key string) {
 func (a *AmazonECSVolumePlugin) Remove(r *volume.RemoveRequest) error {
 	seelog.Infof("Removing volume %s", r.Name)
 	vol, ok := a.getVolume(r.Name)
+	seelog.Infof("Found volume for %s. No lock held.", r.Name)
 	if !ok {
 		seelog.Errorf("Volume %s to remove is not found", r.Name)
 		return fmt.Errorf("volume %s not found", r.Name)
@@ -291,7 +292,9 @@ func (a *AmazonECSVolumePlugin) Remove(r *volume.RemoveRequest) error {
 	}
 
 	// remove the volume information
+	seelog.Infof("Will delete volume %s from memory", r.Name)
 	a.deleteVolume(r.Name)
+	seelog.Infof("Deleted volume %s from memory. No lock held.", r.Name)
 	// cleanup the volume's host mount path
 	err = a.CleanupMountPath(vol.Path)
 	if err != nil {
@@ -308,7 +311,9 @@ func (a *AmazonECSVolumePlugin) Remove(r *volume.RemoveRequest) error {
 
 // List implements Docker volume plugin's List Method
 func (a *AmazonECSVolumePlugin) List() (*volume.ListResponse, error) {
+	seelog.Info("Trying to acquire read lock for List request")
 	a.lock.RLock()
+	seelog.Info("Acquire read lock for List request")
 	defer a.lock.RUnlock()
 	vols := make([]*volume.Volume, len(a.volumes))
 	i := 0
