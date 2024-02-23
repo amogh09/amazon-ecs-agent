@@ -52,6 +52,7 @@ import (
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/registry"
 	"github.com/docker/docker/api/types/volume"
 )
 
@@ -210,6 +211,8 @@ type DockerClient interface {
 
 	// Info returns the information of the Docker server.
 	Info(context.Context, time.Duration) (types.Info, error)
+
+	DistributionInspect(ctx context.Context, image string, authData *apicontainer.RegistryAuthenticationData) (registry.DistributionInspect, error)
 }
 
 // DockerGoClient wraps the underlying go-dockerclient and docker/docker library.
@@ -265,6 +268,8 @@ func (dg *dockerGoClient) WithVersion(version dockerclient.DockerVersion) Docker
 		sdkClientFactory: dg.sdkClientFactory,
 		version:          version,
 		auth:             dg.auth,
+		ecrTokenCache:    dg.ecrTokenCache,
+		ecrClientFactory: dg.ecrClientFactory,
 		config:           dg.config,
 		context:          dg.context,
 	}
@@ -1568,6 +1573,29 @@ func (dg *dockerGoClient) removeImage(ctx context.Context, imageName string) err
 	}
 	_, err = client.ImageRemove(ctx, imageName, types.ImageRemoveOptions{})
 	return err
+}
+
+func (dg *dockerGoClient) DistributionInspect(
+	ctx context.Context, image string, authData *apicontainer.RegistryAuthenticationData,
+) (registry.DistributionInspect, error) {
+	client, err := dg.sdkDockerClient()
+	if err != nil {
+		return registry.DistributionInspect{}, err
+	}
+	encodedAuthConfig := ""
+	if authData != nil {
+		sdkAuthConfig, err := dg.getAuthdata(image, authData)
+		if err != nil {
+			return registry.DistributionInspect{}, wrapPullErrorAsNamedError(image, err)
+		}
+		encodedAuthConfig, err = registry.EncodeAuthConfig(sdkAuthConfig)
+		if err != nil {
+			err = redactEcrUrls(image, err)
+			return registry.DistributionInspect{}, CannotPullECRContainerError{err}
+		}
+	}
+	result, err := client.DistributionInspect(ctx, image, encodedAuthConfig)
+	return result, err
 }
 
 // LoadImage invokes loads an image from an input stream, with a specified timeout

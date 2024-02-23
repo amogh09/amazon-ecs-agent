@@ -22,6 +22,7 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"log"
 	"reflect"
 	"strconv"
 	"strings"
@@ -30,10 +31,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/amazon-ecs-agent/agent/api/container"
 	apicontainer "github.com/aws/amazon-ecs-agent/agent/api/container"
 	"github.com/aws/amazon-ecs-agent/agent/config"
 	"github.com/aws/amazon-ecs-agent/agent/dockerclient"
 	mock_sdkclient "github.com/aws/amazon-ecs-agent/agent/dockerclient/sdkclient/mocks"
+	"github.com/aws/amazon-ecs-agent/agent/dockerclient/sdkclientfactory"
 	mock_sdkclientfactory "github.com/aws/amazon-ecs-agent/agent/dockerclient/sdkclientfactory/mocks"
 	mock_ecr "github.com/aws/amazon-ecs-agent/agent/ecr/mocks"
 	ecrapi "github.com/aws/amazon-ecs-agent/agent/ecr/model/ecr"
@@ -2127,4 +2130,44 @@ func TestListPluginsWithFilter(t *testing.T) {
 	assert.NoError(t, error)
 	assert.Equal(t, 1, len(pluginNames))
 	assert.Equal(t, "name2", pluginNames[0])
+}
+
+func TestDistributionInspect(t *testing.T) {
+	t.Run("dockerhub private", func(t *testing.T) {
+		t.Skip()
+		factory := sdkclientfactory.NewFactory(context.Background(), "unix:///var/run/docker.sock")
+		client, err := factory.GetClient(dockerclient.Version_1_30)
+		require.NoError(t, err)
+		start := time.Now()
+		encodedAuthConfig := ""
+		require.NoError(t, err)
+		res, err := client.DistributionInspect(context.Background(), "amogh09docker/test:latest", encodedAuthConfig)
+		require.NoError(t, err)
+		log.Printf("digest: %v took: %v", res.Descriptor.Digest.String(), time.Now().Sub(start))
+	})
+	t.Run("ecr private", func(t *testing.T) {
+		creds := credentials.IAMRoleCredentials{
+			AccessKeyID:     "ASIA6IFIAJWUGSVV6IFQ",
+			SecretAccessKey: "uFIqCVtLa36WJH/ewI6UIa2rlj4sFvcTL4y8/+ez",
+			SessionToken:    "IQoJb3JpZ2luX2VjEIH//////////wEaCXVzLWVhc3QtMSJHMEUCIQDQwY2UPTwERdFr/A3YrpYuvN4wQ13vwdoSrZfBoYKtCwIgFi+oQ/tE482QCKAM8Zscw7FtjQ52fQB3zbqWOuMTYSAqnAIIaRABGgw5Nzk2MDQ4ODQ5MDQiDM0iQ+M+A20HW2qi3ir5Adp6fgDtFARCVlNDj1E0VNTurzjsu5PJKr1NxZadyXVGIrZGjUN1EdaQ437X331c/MS34aGjeIPR0xY8qAD0sGQ1OXWNK+nAq4hyGGBAU4XBZFNQxTur9F4FO8AQM3paEUUJ3IXpw1mf7ZwfCg4cHVmcGqwSX1mAONMdJfhENcvT5XeP40W7HBiL9/DXDgP2+2+sv65ipBjXTH+Mg0U9jdzeY3+AvPTuDo58VArIWweChDSgqc3/Pi25tvbJD/iOs3MWk6EFPXxn2cQU2/HnRGXMcc43oeg5y4AIDqe9Dcx/8jmxybjwXdGBddRJFrxxjvpyV55BkKJ6YTCFwt+uBjqdAf6+Pkr/0JKu7SMyxszTS0a7zhQkoY6OYfN7gPXG3Zcl8MCZ2+ULDMBjNRpAwP6jBnVvj49y+wxfd8iic+vSB7HflNvyOwQtTxDjMVspvej/atrQ2zBnRpzIh4fX8+/8dcKLm6NYiwqPC0GhTE6BWUE0/JfDx4T0OGRVz1JFmD2XFidgm2lgQEwDWNirE9XJX289vJyueICw+Ndh7YM=",
+		}
+		registryAuthData := container.RegistryAuthenticationData{
+			Type: container.AuthTypeECR,
+			ECRAuthData: &apicontainer.ECRAuthData{
+				Region:     "us-west-2",
+				RegistryID: "979604884904",
+			},
+		}
+		registryAuthData.ECRAuthData.SetPullCredentials(creds)
+		factory := sdkclientfactory.NewFactory(context.Background(), "unix:///var/run/docker.sock")
+		cfg := &config.Config{}
+		defaultClient, err := NewDockerGoClient(factory, cfg, context.Background())
+		require.NoError(t, err)
+		client := defaultClient.WithVersion(dockerclient.Version_1_30)
+		res, err := client.DistributionInspect(context.Background(),
+			"979604884904.dkr.ecr.us-west-2.amazonaws.com/ftest/linux/amazonlinux:2",
+			&registryAuthData)
+		require.NoError(t, err)
+		log.Printf("digest: %v", res.Descriptor.Digest.String())
+	})
 }

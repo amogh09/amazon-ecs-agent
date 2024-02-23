@@ -187,7 +187,7 @@ func TestNewUncheckedContainerStateChangeEvent(t *testing.T) {
 				Container:   task.Containers[0],
 			}
 
-			event, err := newUncheckedContainerStateChangeEvent(task, task.Containers[0], "reason")
+			event, err := NewUncheckedContainerStateChangeEvent(task, task.Containers[0], "reason")
 			if tc.containerType == apicontainer.ContainerNormal {
 				assert.NoError(t, err)
 				assert.Equal(t, expectedEvent, event)
@@ -280,7 +280,7 @@ func TestNewUncheckedContainerStateChangeEvent_SCBridge(t *testing.T) {
 				Container:     task.Containers[0],
 			}
 
-			event, err := newUncheckedContainerStateChangeEvent(task, task.Containers[0], "reason")
+			event, err := NewUncheckedContainerStateChangeEvent(task, task.Containers[0], "reason")
 			if tc.err == nil {
 				assert.NoError(t, err)
 				assert.Equal(t, expectedEvent, event)

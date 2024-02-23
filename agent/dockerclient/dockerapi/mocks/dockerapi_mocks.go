@@ -31,6 +31,7 @@ import (
 	types "github.com/docker/docker/api/types"
 	container0 "github.com/docker/docker/api/types/container"
 	filters "github.com/docker/docker/api/types/filters"
+	registry "github.com/docker/docker/api/types/registry"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -143,6 +144,21 @@ func (m *MockDockerClient) DescribeContainer(arg0 context.Context, arg1 string) 
 func (mr *MockDockerClientMockRecorder) DescribeContainer(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeContainer", reflect.TypeOf((*MockDockerClient)(nil).DescribeContainer), arg0, arg1)
+}
+
+// DistributionInspect mocks base method.
+func (m *MockDockerClient) DistributionInspect(arg0 context.Context, arg1 string, arg2 *container.RegistryAuthenticationData) (registry.DistributionInspect, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DistributionInspect", arg0, arg1, arg2)
+	ret0, _ := ret[0].(registry.DistributionInspect)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DistributionInspect indicates an expected call of DistributionInspect.
+func (mr *MockDockerClientMockRecorder) DistributionInspect(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DistributionInspect", reflect.TypeOf((*MockDockerClient)(nil).DistributionInspect), arg0, arg1, arg2)
 }
 
 // Info mocks base method.

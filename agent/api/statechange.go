@@ -156,7 +156,7 @@ func NewTaskStateChangeEvent(task *apitask.Task, reason string) (TaskStateChange
 // NewContainerStateChangeEvent creates a new container state change event
 // returns error if the state change doesn't need to be sent to the ECS backend.
 func NewContainerStateChangeEvent(task *apitask.Task, cont *apicontainer.Container, reason string) (ContainerStateChange, error) {
-	event, err := newUncheckedContainerStateChangeEvent(task, cont, reason)
+	event, err := NewUncheckedContainerStateChangeEvent(task, cont, reason)
 	if err != nil {
 		return event, err
 	}
@@ -178,7 +178,7 @@ func NewContainerStateChangeEvent(task *apitask.Task, cont *apicontainer.Contain
 	return event, nil
 }
 
-func newUncheckedContainerStateChangeEvent(task *apitask.Task, cont *apicontainer.Container, reason string) (ContainerStateChange, error) {
+func NewUncheckedContainerStateChangeEvent(task *apitask.Task, cont *apicontainer.Container, reason string) (ContainerStateChange, error) {
 	var event ContainerStateChange
 	if cont.IsInternal() {
 		return event, ErrShouldNotSendEvent{cont.Name}
@@ -495,7 +495,13 @@ func buildContainerStateChangePayload(change ContainerStateChange) (*ecsmodel.Co
 	}
 
 	stat := change.Status.String()
-	if stat != apicontainerstatus.ContainerStopped.String() && stat != apicontainerstatus.ContainerRunning.String() {
+	if change.Status < apicontainerstatus.ContainerRunning {
+		stat = "PENDING"
+	}
+
+	if stat != apicontainerstatus.ContainerStopped.String() &&
+		stat != apicontainerstatus.ContainerRunning.String() &&
+		stat != "PENDING" {
 		logger.Warn("Not submitting unsupported upstream container state", logger.Fields{
 			field.Status:        stat,
 			field.ContainerName: change.ContainerName,

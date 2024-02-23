@@ -723,6 +723,13 @@ func (c *Container) SetImageDigest(ImageDigest string) {
 	c.ImageDigest = ImageDigest
 }
 
+func (c *Container) SetImage(image string) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	c.Image = image
+}
+
 // GetImageDigest gets the ImageDigest for a container
 func (c *Container) GetImageDigest() string {
 	c.lock.RLock()

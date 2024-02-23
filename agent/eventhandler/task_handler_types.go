@@ -85,7 +85,7 @@ func (event *sendableEvent) taskShouldBeSent() bool {
 	}
 
 	// Task event should be sent
-	if tevent.Task.GetSentStatus() < tevent.Status {
+	if tevent.Task.GetSentStatus() < tevent.Status || tevent.Status == apitaskstatus.TaskStatusNone {
 		return true
 	}
 

@@ -105,6 +105,7 @@ func (authProvider *ecrAuthProvider) GetAuthconfig(image string,
 
 // getAuthconfigFromCache retrieves the token from cache
 func (authProvider *ecrAuthProvider) getAuthConfigFromCache(key cacheKey) *types.AuthConfig {
+	log.Infof("tokenCache nil: %v", authProvider.tokenCache == nil)
 	token, ok := authProvider.tokenCache.Get(key.String())
 	if !ok {
 		return nil

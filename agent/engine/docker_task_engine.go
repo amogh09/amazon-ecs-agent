@@ -58,6 +58,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/docker/docker/api/types"
 	dockercontainer "github.com/docker/docker/api/types/container"
+	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 )
 
@@ -1229,6 +1230,61 @@ func (engine *DockerTaskEngine) SetDaemonTask(daemonName string, task *apitask.T
 
 func (engine *DockerTaskEngine) GetDaemonManagers() map[string]dm.DaemonManager {
 	return engine.daemonManagers
+}
+
+func (engine *DockerTaskEngine) getImageDigest(
+	task *apitask.Task, container *apicontainer.Container,
+) digest.Digest {
+	switch container.Type {
+	case apicontainer.ContainerCNIPause, apicontainer.ContainerNamespacePause,
+		apicontainer.ContainerServiceConnectRelay, apicontainer.ContainerManagedDaemon:
+		return ""
+	}
+	if task.IsServiceConnectEnabled() && container == task.GetServiceConnectContainer() {
+		return ""
+	}
+
+	client := engine.client.WithVersion(dockerclient.Version_1_30)
+	version, err := client.APIVersion()
+	if err != nil {
+		logger.Error("Failed to find Docker client version", logger.Fields{
+			"error":     err,
+			"task":      task.GetID(),
+			"container": container.Name,
+		})
+		return ""
+	}
+	if version != dockerclient.Version_1_30 {
+		logger.Error("Couldn't find the right docker client version", logger.Fields{
+			"requested": dockerclient.Version_1_30,
+			"received":  version,
+			"task":      task.GetID(),
+			"container": container.Name,
+		})
+		return ""
+	}
+
+	logger.Info("Got Docker client with the right version", logger.Fields{
+		"version":   version,
+		"task":      task.GetID(),
+		"container": container.Name,
+	})
+	result, err := client.DistributionInspect(context.Background(), container.Image, nil)
+	if err != nil {
+		logger.Error("Failed to get distribution inspect", logger.Fields{
+			"task":      task.GetID(),
+			"container": container.Name,
+			"error":     err,
+		})
+		return ""
+	}
+	logger.Info("Got image digest", logger.Fields{
+		"container":     container.Name,
+		"task":          task.GetID(),
+		"digestStr":     result.Descriptor.Digest.String(),
+		"digestEncoded": result.Descriptor.Digest.Encoded(),
+	})
+	return result.Descriptor.Digest
 }
 
 func (engine *DockerTaskEngine) pullContainer(task *apitask.Task, container *apicontainer.Container) dockerapi.DockerContainerMetadata {

@@ -25,6 +25,7 @@ import (
 
 	"github.com/aws/amazon-ecs-agent/agent/engine/execcmd"
 	"github.com/docker/distribution/reference"
+	"github.com/docker/docker/api/types/registry"
 	"github.com/opencontainers/go-digest"
 
 	"github.com/aws/amazon-ecs-agent/agent/api"
@@ -298,19 +299,6 @@ func (mtask *managedTask) updateContainerImageDigests() {
 		wg.Add(1)
 		go func(task *apitask.Task, container *apicontainer.Container) {
 			defer wg.Done()
-
-			logErrorWithDetails := func(msg string, err error, extraFields logger.Fields) {
-				fields := logger.Fields{
-					"task":      mtask.Task.GetID(),
-					"container": container.Name,
-					"error":     err,
-				}
-				for k, v := range extraFields {
-					fields[k] = v
-				}
-				logger.Error(msg, fields)
-			}
-
 			dgst := digest.Digest(container.GetImageDigest())
 			if dgst != "" {
 				logger.Info("Image digest is already set for container, so skipping computing again",
@@ -319,7 +307,11 @@ func (mtask *managedTask) updateContainerImageDigests() {
 			}
 			imageRef, err := reference.ParseAnyReference(container.Image)
 			if err != nil {
-				logErrorWithDetails("Failed to parse container image name as any ref", err, nil)
+				logger.Error("Failed to parse container image name", logger.Fields{
+					"task":      mtask.Task.GetID(),
+					"container": container.Name,
+					"error":     err,
+				})
 				return
 			}
 			switch v := imageRef.(type) {
@@ -328,35 +320,22 @@ func (mtask *managedTask) updateContainerImageDigests() {
 			case reference.Named:
 				dgst = mtask.engine.getImageDigest(task, container)
 				if dgst == "" {
-					logErrorWithDetails("Failed to get image digest for container.", nil, nil)
+					logger.Error("Failed to get image digest for container.",
+						logger.Fields{"container": container.Name, "task": task.GetID()})
 					return
 				}
 			default:
-				logErrorWithDetails("Unknown image reference found", err, nil)
-				return
-			}
-
-			nameRef, err := reference.ParseNormalizedNamed(container.Image)
-			if err != nil {
-				logErrorWithDetails("Failed to parse container image name as named ref", err, nil)
-				return
-			}
-			canonicalRef, err := reference.WithDigest(nameRef, dgst)
-			if err != nil {
-				logErrorWithDetails("Failed to create canonical image reference", err, logger.Fields{
-					"namedRef": nameRef,
-					"digest":   dgst,
+				logger.Error("Unknown image reference found", logger.Fields{
+					"task":      mtask.Task.GetID(),
+					"container": container.Name,
+					"error":     err,
 				})
 				return
 			}
 
-			logger.Info("Setting image and image digest for the container", logger.Fields{
-				"task":      mtask.Task.GetID(),
-				"container": container.Name,
-				"digest":    canonicalRef.String(),
-			})
-			container.SetImageDigest(canonicalRef.String())
-			container.SetImage(canonicalRef.String())
+            nameRef, err := reference.ParseNormalizedNamed(container.Image)
+
+			container.SetImageDigest(dgst)
 			event, err := api.NewUncheckedContainerStateChangeEvent(task, container, "")
 			if err != nil {
 				if _, ok := err.(api.ErrShouldNotSendEvent); ok {
@@ -568,8 +547,10 @@ func (mtask *managedTask) handleContainerChange(containerChange dockerContainerC
 		field.Container: container.Name,
 		field.RuntimeID: runtimeID,
 		field.Status:    event.Status.String(),
+		"imageDigest":   container.ImageDigest,
 	}
 
+	logger.Info("handleContainerChange", logger.Fields{"event": eventLogFields})
 	if event.Status.String() == apicontainerstatus.ContainerStatusNone.String() ||
 		(event.Status == apicontainerstatus.ContainerRunning && containerKnownStatus == apicontainerstatus.ContainerResourcesProvisioned) {
 		logger.Debug("Handling container change event", eventLogFields)
