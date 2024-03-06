@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -46,8 +47,10 @@ import (
 	"github.com/aws/amazon-ecs-agent/ecs-agent/ec2"
 	"github.com/aws/amazon-ecs-agent/ecs-agent/utils/retry"
 	mock_ttime "github.com/aws/amazon-ecs-agent/ecs-agent/utils/ttime/mocks"
+	"github.com/opencontainers/go-digest"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types"
 	dockercontainer "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
@@ -2132,6 +2135,161 @@ func TestListPluginsWithFilter(t *testing.T) {
 	assert.Equal(t, "name2", pluginNames[0])
 }
 
+func TestManifestFetchTime(t *testing.T) {
+	images := []string{
+		// "979604884904.dkr.ecr.us-west-2.amazonaws.com/ftest/linux/amazonlinux:2",
+		"ubuntu:latest",
+		// "busybox@sha256:478209e7be50e5f5c9fd47a6a71d43c119dd44c393160e49dc4bb86f99a439de",
+		"public.ecr.aws/ubuntu/ubuntu:latest",
+		// "public.ecr.aws/ubuntu/ubuntu@sha256:424997752d9e0b47a7f14757558c4fe128ee6a1abad1af52cd96a660e00438fe",
+	}
+	type result struct {
+		manifestFetchTime time.Duration
+		pullTime          time.Duration
+	}
+
+	type finalResult struct {
+		image     string
+		oldResult result
+		newResult result
+	}
+	results := []finalResult{}
+
+	var newClient = func() DockerClient {
+		factory := sdkclientfactory.NewFactory(context.Background(), "unix:///var/run/docker.sock")
+		cfg := &config.Config{ImagePullInactivityTimeout: 30 * time.Second}
+		defaultClient, err := NewDockerGoClient(factory, cfg, context.Background())
+		require.NoError(t, err)
+		return defaultClient.WithVersion(dockerclient.Version_1_30)
+	}
+
+	var oldPull = func(image string) result {
+		client := newClient()
+		var registryAuthData *container.RegistryAuthenticationData
+		start := time.Now()
+		metadata := client.PullImage(context.Background(), image, registryAuthData, 30*time.Second)
+		require.Nil(t, metadata.Error)
+		return result{
+			manifestFetchTime: 0,
+			pullTime:          time.Now().Sub(start),
+		}
+	}
+
+	var newPull = func(image string) result {
+		client := newClient()
+		var registryAuthData *container.RegistryAuthenticationData
+		start := time.Now()
+		dgst, err := client.DistributionInspect(context.Background(), image, registryAuthData)
+		require.NoError(t, err)
+		manifestPullTime := time.Now().Sub(start)
+
+		nameRef, err := reference.ParseNormalizedNamed(image)
+		require.NoError(t, err)
+		canonicalRef, err := reference.WithDigest(nameRef, dgst.Descriptor.Digest)
+		require.NoError(t, err)
+
+		start = time.Now()
+		metadata := client.PullImage(
+			context.Background(), canonicalRef.String(), registryAuthData, 30*time.Second)
+		require.Nil(t, metadata.Error)
+		return result{
+			manifestFetchTime: manifestPullTime,
+			pullTime:          time.Now().Sub(start),
+		}
+	}
+
+	for _, image := range images {
+		// creds := credentials.IAMRoleCredentials{
+		// 	AccessKeyID:     "ASIA6IFIAJWUEHI5JJOH",
+		// 	SecretAccessKey: "AzQYDZwxGZYx8qg7cNrch/pkvW8VfwMApBVTTcKS",
+		// 	SessionToken:    "IQoJb3JpZ2luX2VjELb//////////wEaCXVzLWVhc3QtMSJHMEUCIQCB0hz5KZNXZBxA9VtpAtSuOBKljvFxp04whchCpAPpiAIgaYzjDQE2onGqTHTQ1u7qQh/VHnPJTgkyKjk0FpJxcUwqpQIIrv//////////ARABGgw5Nzk2MDQ4ODQ5MDQiDCMNLuAFYgq8N+bSair5AepyxxgiyfU2CK73kO/TwHFPgfcHVBWoH9O+QiUm3IKCqNg7aAQFrc6sruPBIJoHd8BrCr5vqVTybNhzYvdT/V5KlzNsXdQa2eQ6xadXp6MTxYvJfm6NcoSGc2ND4kHhlGsxes/eo1K3t4lG3YMdSRozemRyEvhgqgygkzT3oNACISnb81slsnKOUmaKE83hG0pac6Y1igulEh6AFAuw4rJEsulyVx12UsaMModNMz17ehIPRT4sB9itkgeYSpAfhG/AElV+PxKeq5/RHAzBXwHDtPNFg15Zr7LhQvfxgE+JF14rw4hyaIvfFKyXcMMHsC0PBREfpNFp7zCUt6OvBjqdAVlU/3quMvtnp9IOdSOQgoPfN4/29pocqijRxHUyi9wMJueu6ymOY3AHSZachOG745aoNnjr4fDIUTY/+HhJIMOamEnVuw1g/8VqO9Fvh86fupVAO+JQ5XPjJH6ccxe6RM7+rKxy/janWEbd7TlgZzyEJW2tN36T6gqcJIUOVUS2amaEtF71+LIZesK/We5WjVCRgr6EgGN2FC+g7Vo=",
+		// }
+		// registryAuthData = &container.RegistryAuthenticationData{
+		// 	Type: container.AuthTypeECR,
+		// 	ECRAuthData: &apicontainer.ECRAuthData{
+		// 		Region:     "us-west-2",
+		// 		RegistryID: "979604884904",
+		// 	},
+		// }
+		// registryAuthData.ECRAuthData.SetPullCredentials(creds)
+
+		oldRes := oldPull(image)
+		newRes := newPull(image)
+		results = append(results, finalResult{image: image, oldResult: oldRes, newResult: newRes})
+
+		// inspectRes, err := client.InspectImage(image)
+		// require.NoError(t, err)
+
+		// log.Printf("Removing %v", inspectRes.ID)
+		// err = client.RemoveImage(context.Background(), inspectRes.ID, 30*time.Second)
+		// require.NoError(t, err)
+
+	}
+	log.Print("Printing results")
+	for _, result := range results {
+		newTotal := result.newResult.manifestFetchTime + result.newResult.pullTime
+		fmt.Printf("image: %v, old: %v, new: %v, manifest: %v, new_total: %v, impact: %v\n",
+			result.image, result.oldResult.pullTime, result.newResult.pullTime,
+			result.newResult.manifestFetchTime,
+			newTotal,
+			newTotal-result.oldResult.pullTime,
+		)
+	}
+}
+
+// func imageDigestFast(t *testing.T, refStr string) string {
+// 	ref, err := reference.ParseNormalizedNamed(refStr)
+// 	require.NoError(t, err)
+// 	repoInfo, err := registry.ParseRepositoryInfo(ref)
+// 	require.NoError(t, err)
+// 	registryService, err := registry.NewService(registry.ServiceOptions{})
+// 	require.NoError(t, err)
+// 	endpoints, err := registryService.LookupPullEndpoints(reference.Domain(repoInfo.Name))
+// 	require.NoError(t, err)
+// 	log.Printf("endpoints %+v", endpoints)
+// 	endpoint := endpoints[0]
+// 	repoName, err := reference.WithName(getRepoName(repoInfo, &endpoint))
+// 	require.NoError(t, err)
+// 	log.Printf("repoName is %v %v %v", repoName, repoName.Name(), repoName.String())
+
+// 	creds := registry.NewStaticCredentialStore(nil)
+// 	base := http.DefaultTransport
+// 	tokenHandler := auth.NewTokenHandler(base, creds, repoName.Name(), "pull")
+// 	require.NoError(t, err)
+// 	challengeManager, err := registry.PingV2Registry(endpoint.URL, base)
+// 	require.NoError(t, err)
+// 	authorizer := auth.NewAuthorizer(challengeManager, tokenHandler)
+// 	transport := transport.NewTransport(base, authorizer)
+
+// 	require.NoError(t, err)
+// 	repo, err := distributionclient.NewRepository(repoName, endpoint.URL.String(), transport)
+// 	require.NoError(t, err)
+// 	manSvc, err := repo.Manifests(context.Background())
+// 	require.NoError(t, err)
+// 	mediaTypes := []string{
+// 		// v1.MediaTypeImageManifest,
+// 		// v2.MediaTypeManifest,
+// 		manifestlist.MediaTypeManifestList,
+// 	}
+// 	dgst, manifestServiceOpts, err := getManifestOptionsFromReference(ref)
+// 	require.NoError(t, err)
+// 	manifestServiceOpts = append(manifestServiceOpts, distribution.WithManifestMediaTypes(mediaTypes))
+// 	manifest, err := manSvc.Get(context.Background(), dgst, manifestServiceOpts...)
+// 	require.NoError(t, err)
+// 	switch v := manifest.(type) {
+// 	case *manifestlist.DeserializedManifestList:
+// 		_, payload, err := v.Payload()
+// 		if err != nil {
+// 			panic(err)
+// 		}
+// 		repoDigest := digest.FromBytes(payload)
+// 		log.Printf("manifest digest %v", repoDigest)
+// 	default:
+// 		panic(errors.Errorf("unsupported manifest format: %v", v))
+// 	}
+
+// }
+
 func TestDistributionInspect(t *testing.T) {
 	t.Run("dockerhub private", func(t *testing.T) {
 		t.Skip()
@@ -2141,11 +2299,12 @@ func TestDistributionInspect(t *testing.T) {
 		start := time.Now()
 		encodedAuthConfig := ""
 		require.NoError(t, err)
-		res, err := client.DistributionInspect(context.Background(), "amogh09docker/test:latest", encodedAuthConfig)
+		res, err := client.DistributionInspect(context.Background(), "ubuntu:latest", encodedAuthConfig)
 		require.NoError(t, err)
 		log.Printf("digest: %v took: %v", res.Descriptor.Digest.String(), time.Now().Sub(start))
 	})
 	t.Run("ecr private", func(t *testing.T) {
+		t.Skip()
 		creds := credentials.IAMRoleCredentials{
 			AccessKeyID:     "ASIA6IFIAJWUGSVV6IFQ",
 			SecretAccessKey: "uFIqCVtLa36WJH/ewI6UIa2rlj4sFvcTL4y8/+ez",

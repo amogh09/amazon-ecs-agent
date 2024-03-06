@@ -265,13 +265,14 @@ type ImagePullResponse struct {
 
 func (dg *dockerGoClient) WithVersion(version dockerclient.DockerVersion) DockerClient {
 	return &dockerGoClient{
-		sdkClientFactory: dg.sdkClientFactory,
-		version:          version,
-		auth:             dg.auth,
-		ecrTokenCache:    dg.ecrTokenCache,
-		ecrClientFactory: dg.ecrClientFactory,
-		config:           dg.config,
-		context:          dg.context,
+		sdkClientFactory:         dg.sdkClientFactory,
+		version:                  version,
+		auth:                     dg.auth,
+		ecrTokenCache:            dg.ecrTokenCache,
+		ecrClientFactory:         dg.ecrClientFactory,
+		config:                   dg.config,
+		context:                  dg.context,
+		inactivityTimeoutHandler: dg.inactivityTimeoutHandler,
 	}
 }
 

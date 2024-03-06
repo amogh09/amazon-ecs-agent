@@ -39,7 +39,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/cihub/seelog"
 	"github.com/docker/docker/pkg/meminfo"
 )
 
@@ -493,7 +492,6 @@ func (client *ecsClient) getCustomAttributes() []*ecsmodel.Attribute {
 }
 
 func (client *ecsClient) SubmitTaskStateChange(change ecs.TaskStateChange) error {
-	seelog.Infof("SubmitTaskStateChange %+v", change)
 	if change.Attachment != nil && client.stscAttachmentCustomRetryBackoff != nil {
 		retryFunc := func() error {
 			err := client.submitTaskStateChange(change)
