@@ -1599,6 +1599,14 @@ func (dg *dockerGoClient) DistributionInspect(
 	return result, err
 }
 
+func (dg *dockerGoClient) ImageTag(ctx context.Context, imageName, tag string) error {
+	client, err := dg.sdkDockerClient()
+	if err != nil {
+		return err
+	}
+	return client.ImageTag(ctx, imageName, tag)
+}
+
 // LoadImage invokes loads an image from an input stream, with a specified timeout
 func (dg *dockerGoClient) LoadImage(ctx context.Context, inputStream io.Reader, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
