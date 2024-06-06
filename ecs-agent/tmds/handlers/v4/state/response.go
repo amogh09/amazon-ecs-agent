@@ -37,6 +37,7 @@ type TaskResponse struct {
 	ClockDrift              *ClockDrift              `json:"ClockDrift,omitempty"`
 	EphemeralStorageMetrics *EphemeralStorageMetrics `json:"EphemeralStorageMetrics,omitempty"`
 	CredentialsID           string                   `json:"-"`
+	Netns                   string                   `json:"-"`
 }
 
 // Instance's clock drift status

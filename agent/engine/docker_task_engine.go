@@ -2276,6 +2276,7 @@ func (engine *DockerTaskEngine) provisionContainerResourcesAwsvpc(task *apitask.
 	}
 
 	task.SetPausePIDInVolumeResources(strconv.Itoa(containerInspectOutput.State.Pid))
+	task.Netns = fmt.Sprintf(ecscni.NetnsFormat, strconv.Itoa(containerInspectOutput.State.Pid))
 
 	cniConfig, err := engine.buildCNIConfigFromTaskContainerAwsvpc(task, containerInspectOutput, true)
 	if err != nil {

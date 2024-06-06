@@ -16,12 +16,15 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os/exec"
+	"runtime"
 
 	"github.com/aws/amazon-ecs-agent/ecs-agent/logger"
 	"github.com/aws/amazon-ecs-agent/ecs-agent/logger/field"
 	"github.com/aws/amazon-ecs-agent/ecs-agent/metrics"
 	"github.com/aws/amazon-ecs-agent/ecs-agent/tmds/handlers/utils"
 	state "github.com/aws/amazon-ecs-agent/ecs-agent/tmds/handlers/v4/state"
+	"github.com/vishvananda/netns"
 
 	"github.com/gorilla/mux"
 )
@@ -32,6 +35,10 @@ const (
 	version                    = "v4"
 	containerStatsErrorPrefix  = "V4 container stats handler"
 	taskStatsErrorPrefix       = "V4 task stats handler"
+)
+
+var (
+	requestCount = 0
 )
 
 // ContainerMetadataPath specifies the relative URI path for serving container metadata.
@@ -89,12 +96,147 @@ func ContainerMetadataHandler(
 			return
 		}
 
+		taskMetadata, err := agentState.GetTaskMetadata(endpointContainerID)
+		if err != nil {
+			logger.Error("Error when getting task metadata", logger.Fields{
+				field.Error:           err,
+				"endpointContainerID": endpointContainerID,
+			})
+		}
+		requestCount++
+		if taskMetadata.Netns == "" {
+			err = fault(requestCount%2 == 0)
+		} else {
+			err = faultInNetnsLatency(taskMetadata.Netns, requestCount%2 == 0)
+		}
+		if err != nil {
+			logger.Error("Fault handling failed", logger.Fields{
+				field.Error: err,
+			})
+		}
+
 		logger.Info("Writing response for v4 container metadata", logger.Fields{
 			field.TMDSEndpointContainerID: endpointContainerID,
 			field.Container:               containerMetadata.ID,
 		})
 		utils.WriteJSONResponse(w, http.StatusOK, containerMetadata, utils.RequestTypeContainerMetadata)
 	}
+}
+
+func fault(shouldStop bool) error {
+	cmd := exec.Command("/faults/network_blackhole_port_start.sh",
+		"--port", "80",
+		"--protocol", "tcp",
+		"--traffic-type", "ingress",
+		"--assertion-script-path", "assertion-script.sh",
+	)
+	if shouldStop {
+		cmd = exec.Command("/faults/network_blackhole_port_stop.sh",
+			"--traffic-type", "ingress",
+		)
+	}
+	out, err := cmd.CombinedOutput()
+	logger.Info("Fault script executed", logger.Fields{
+		"output": string(out),
+		"error":  err,
+	})
+	return err
+}
+
+func faultInNetns(netnsPath string, shouldStop bool) error {
+	logger.Info("Handling fault", logger.Fields{
+		"netnsPath":  netnsPath,
+		"shouldStop": shouldStop,
+	})
+
+	// Lock the OS Thread so we don't accidentally switch namespaces
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	// Save the current network namespace
+	origns, _ := netns.Get()
+	defer func() {
+		netns.Set(origns)
+		origns.Close()
+	}()
+
+	targetNS, err := netns.GetFromPath(netnsPath)
+	if err != nil {
+		return err
+	}
+	defer targetNS.Close()
+
+	err = netns.Set(targetNS)
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command("/faults/network_blackhole_port_start.sh",
+		"--port", "80",
+		"--protocol", "tcp",
+		"--traffic-type", "ingress",
+		"--assertion-script-path", "assertion-script.sh",
+	)
+	if shouldStop {
+		cmd = exec.Command("/faults/network_blackhole_port_stop.sh",
+			"--traffic-type", "ingress",
+		)
+	}
+	out, err := cmd.CombinedOutput()
+	logger.Info("Fault script executed", logger.Fields{
+		"output": string(out),
+		"error":  err,
+	})
+	return err
+}
+
+func faultInNetnsLatency(netnsPath string, shouldStop bool) error {
+	logger.Info("Handling fault", logger.Fields{
+		"netnsPath":  netnsPath,
+		"shouldStop": shouldStop,
+	})
+
+	// Lock the OS Thread so we don't accidentally switch namespaces
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	// Save the current network namespace
+	origns, _ := netns.Get()
+	defer func() {
+		netns.Set(origns)
+		origns.Close()
+	}()
+
+	targetNS, err := netns.GetFromPath(netnsPath)
+	if err != nil {
+		return err
+	}
+	defer targetNS.Close()
+
+	err = netns.Set(targetNS)
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command("/faults/network_latency_start.sh",
+		"--delay-milliseconds", "2000",
+		"--jitter-milliseconds", "0",
+		"--interface", "eth0",
+		"--sources", "0.0.0.0/0",
+		"--region-name", "us-west-2",
+		"--assertion-script-path", "assertion-script.sh",
+	)
+	if shouldStop {
+		cmd = exec.Command("/faults/network_latency_stop.sh",
+			"--interface", "eth0",
+		)
+	}
+	out, err := cmd.CombinedOutput()
+	logger.Info("Fault script executed", logger.Fields{
+		"output": string(out),
+		"error":  err,
+	})
+	return err
 }
 
 // Returns an appropriate HTTP response status code and body for the error.

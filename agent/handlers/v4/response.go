@@ -61,11 +61,13 @@ func NewTaskResponse(
 		})
 	}
 
+	task, _ := state.TaskByArn(taskARN)
 	return &tmdsv4.TaskResponse{
 		TaskResponse: v2Resp,
 		Containers:   containers,
 		VPCID:        vpcID,
 		ServiceName:  serviceName,
+		Netns:        task.Netns,
 	}, nil
 }
 

@@ -50,6 +50,9 @@ cp ./misc/plugins/ecs-ipam rootfs/amazon-ecs-cni-plugins/ecs-ipam
 cp ./misc/plugins/vpc-branch-eni rootfs/amazon-ecs-cni-plugins/vpc-branch-eni
 cp ./misc/plugins/ecs-serviceconnect rootfs/amazon-ecs-cni-plugins/ecs-serviceconnect
 
+# Add fault injection scripts
+cp -r ./faults rootfs/faults
+
 # add certs
 mkdir -p rootfs/etc/ssl/certs/
 cp ./misc/certs/host-certs.crt rootfs/etc/ssl/certs/ca-certificates.crt

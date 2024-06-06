@@ -182,6 +182,7 @@ type Task struct {
 	ServiceName string
 	// Containers are the containers for the task
 	Containers []*apicontainer.Container
+	Netns      string
 	// Associations are the available associations for the task.
 	Associations []Association `json:"associations"`
 	// ResourcesMapUnsafe is the map of resource type to corresponding resources
