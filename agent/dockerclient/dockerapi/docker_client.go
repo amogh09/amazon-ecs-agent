@@ -91,6 +91,13 @@ const (
 	pullRetryDelayMultiplier  = 2
 	pullRetryJitterMultiplier = 0.2
 
+	// Retry settings for manifest fetch
+	maximumManifestRetries        = 12
+	minimumManifestRetryDelay     = 10 * time.Millisecond
+	maximumManifestRetryDelay     = 5 * time.Second
+	manifestRetryDelayMultiplier  = 2
+	manifestRetryJitterMultiplier = 0.2
+
 	// retry settings for tagging images
 	tagImageRetryAttempts = 5
 	tagImageRetryInterval = 100 * time.Millisecond
@@ -325,8 +332,8 @@ func NewDockerGoClient(sdkclientFactory sdkclientfactory.Factory,
 		context:          ctx,
 		imagePullBackoff: retry.NewExponentialBackoff(minimumPullRetryDelay, maximumPullRetryDelay,
 			pullRetryJitterMultiplier, pullRetryDelayMultiplier),
-		manifestPullBackoff: retry.NewExponentialBackoff(minimumPullRetryDelay, maximumPullRetryDelay,
-			pullRetryJitterMultiplier, pullRetryDelayMultiplier),
+		manifestPullBackoff: retry.NewExponentialBackoff(minimumManifestRetryDelay, maximumManifestRetryDelay,
+			manifestRetryJitterMultiplier, manifestRetryDelayMultiplier),
 		imageTagBackoff:          retry.NewConstantBackoff(tagImageRetryInterval),
 		inactivityTimeoutHandler: handleInactivityTimeout,
 	}, nil
@@ -372,7 +379,7 @@ func (dg *dockerGoClient) PullImageManifest(
 	// Call DistributionInspect API with retries
 	startTime := time.Now()
 	var distInspectPtr *registry.DistributionInspect
-	err = retry.RetryNWithBackoffCtx(ctx, dg.manifestPullBackoff, maximumPullRetries, func() error {
+	err = retry.RetryNWithBackoffCtx(ctx, dg.manifestPullBackoff, maximumManifestRetries, func() error {
 		distInspect, err := client.DistributionInspect(ctx, imageRef, encodedAuth)
 		if err != nil {
 			return err
