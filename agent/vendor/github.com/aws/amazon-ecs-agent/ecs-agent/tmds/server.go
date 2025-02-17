@@ -30,6 +30,7 @@ import (
 const (
 	// TMDS IP and port
 	IPv4         = "127.0.0.1"
+	IPv6         = "fd00:ec5::254"
 	Port         = 51679
 	IPForTasks   = "169.254.170.2"
 	PortForTasks = 80
@@ -38,6 +39,10 @@ const (
 // IPv4 address for TMDS
 func AddressIPv4() string {
 	return fmt.Sprintf("%s:%d", IPv4, Port)
+}
+
+func AddressIPv6() string {
+	return fmt.Sprintf("[%s]:%d", IPv6, 80)
 }
 
 // Configuration for TMDS

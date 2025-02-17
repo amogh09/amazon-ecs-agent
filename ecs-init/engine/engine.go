@@ -28,6 +28,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/ecs-init/docker"
 	"github.com/aws/amazon-ecs-agent/ecs-init/exec"
 	"github.com/aws/amazon-ecs-agent/ecs-init/exec/iptables"
+	"github.com/aws/amazon-ecs-agent/ecs-init/exec/ipv6"
 	"github.com/aws/amazon-ecs-agent/ecs-init/exec/sysctl"
 	"github.com/aws/amazon-ecs-agent/ecs-init/gpu"
 
@@ -98,6 +99,10 @@ func New() (*Engine, error) {
 		return nil, err
 	}
 	credentialsProxyRoute, err := iptables.NewNetfilterRoute(cmdExec)
+	if err != nil {
+		return nil, err
+	}
+	err = ipv6.CreateTMDSIPv6Interface()
 	if err != nil {
 		return nil, err
 	}

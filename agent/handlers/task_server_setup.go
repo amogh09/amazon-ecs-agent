@@ -101,7 +101,7 @@ func taskServerSetup(
 
 	return tmds.NewServer(auditLogger,
 		tmds.WithHandler(muxRouter),
-		tmds.WithListenAddress(tmds.AddressIPv4()),
+		tmds.WithListenAddress(tmds.AddressIPv6()),
 		tmds.WithReadTimeout(readTimeout),
 		tmds.WithWriteTimeout(writeTimeout),
 		tmds.WithSteadyStateRate(float64(steadyStateRate)),

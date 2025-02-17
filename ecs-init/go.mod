@@ -17,6 +17,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.9.0
+	github.com/vishvananda/netlink v1.1.1-0.20210330154013-f5de75959ad5
 )
 
 require (
@@ -54,6 +55,7 @@ require (
 	github.com/opencontainers/image-spec v1.1.0-rc2.0.20221005185240-3a7f492d3f1b // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/vishvananda/netns v0.0.0-20210104183010-2eb08e3e575f // indirect
 	golang.org/x/mod v0.8.0 // indirect
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
