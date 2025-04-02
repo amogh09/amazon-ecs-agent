@@ -162,6 +162,12 @@ func (m *manager) augmentAgentContainer(task *apitask.Task, container *apicontai
 		if err != nil {
 			return err
 		}
+	} else if task.IsNetworkModeAWSVPC() {
+		logger.Info("Augmenting service connect agent container for awsvpc mode")
+		err := task.PopulateServiceConnectContainerMappingEnvVarAwsvpc()
+		if err != nil {
+			return err
+		}
 	}
 	adminPath, err := m.initAgentDirectoryMounts(task.GetID(), container, hostConfig)
 	if err != nil {

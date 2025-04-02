@@ -3552,6 +3552,30 @@ func (task *Task) PopulateServiceConnectContainerMappingEnvVar() error {
 	return nil
 }
 
+func (task *Task) PopulateServiceConnectContainerMappingEnvVarAwsvpc() error {
+	envVars := make(map[string]string)
+	containerMapping := make(map[string]string)
+	ipv6Addrs := task.GetPrimaryENI().GetIPV6Addresses()
+	for _, c := range task.Containers {
+		if c.Type == apicontainer.ContainerCNIPause {
+			continue
+		}
+		if len(ipv6Addrs) > 0 {
+			containerMapping[c.Name] = "::1"
+		}
+	}
+	logger.Info(
+		"Computed container mapping for awsvpc mode",
+		logger.Fields{"containerMapping": fmt.Sprintf("%+v", containerMapping)})
+	containerMappingJson, err := json.Marshal(containerMapping)
+	if err != nil {
+		return fmt.Errorf("error injecting required env vars APPNET_CONTAINER_MAPPING to Service Connect container: %w", err)
+	}
+	envVars[serviceConnectContainerMappingEnvVar] = string(containerMappingJson)
+	task.GetServiceConnectContainer().MergeEnvironmentVariables(envVars)
+	return nil
+}
+
 func (task *Task) PopulateServiceConnectRuntimeConfig(serviceConnectConfig serviceconnect.RuntimeConfig) {
 	task.lock.Lock()
 	defer task.lock.Unlock()
