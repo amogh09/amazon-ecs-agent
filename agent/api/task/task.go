@@ -3541,7 +3541,7 @@ func (task *Task) PopulateServiceConnectContainerMappingEnvVar() error {
 		if err != nil {
 			return fmt.Errorf("error retrieving task container for pause container %s: %+v", c.Name, err)
 		}
-		containerMapping[taskContainer.Name] = c.GetNetworkSettings().IPAddress
+		containerMapping[taskContainer.Name] = c.GetNetworkSettings().GlobalIPv6Address
 	}
 	containerMappingJson, err := json.Marshal(containerMapping)
 	if err != nil {
