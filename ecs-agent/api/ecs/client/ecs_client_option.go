@@ -106,3 +106,11 @@ func WithMetricsFactory(metricsFactory metrics.EntryFactory) ECSClientOption {
 		client.metricsFactory = metricsFactory
 	}
 }
+
+// WithDualStackEndpoint is an ECSClientOption that configures the client's usage of
+// dual stack ECS endpoints.
+func WithDualStackEndpoint(shouldUseDualStackEndpoint bool) ECSClientOption {
+	return func(client *ecsClient) {
+		client.shouldUseDualStackEndpoint = shouldUseDualStackEndpoint
+	}
+}

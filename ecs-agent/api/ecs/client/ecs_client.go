@@ -92,6 +92,7 @@ type ecsClient struct {
 	pollEndpointCache                async.TTLCache
 	pollEndpointLock                 sync.Mutex
 	isFIPSDetected                   bool
+	shouldUseDualStackEndpoint       bool
 	shouldExcludeIPv6PortBinding     bool
 	sascCustomRetryBackoff           func(func() error) error
 	stscAttachmentCustomRetryBackoff func(func() error) error
@@ -119,7 +120,9 @@ func NewECSClient(
 		opt(client)
 	}
 
-	ecsConfig, err := newECSConfig(client.credentialsCache, configAccessor, client.httpClient, client.isFIPSDetected)
+	ecsConfig, err := newECSConfig(
+		client.credentialsCache, configAccessor, client.httpClient,
+		client.isFIPSDetected, client.shouldUseDualStackEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -145,6 +148,7 @@ func newECSConfig(
 	configAccessor config.AgentConfigAccessor,
 	httpClient *http.Client,
 	isFIPSEnabled bool,
+	shouldUseDualStackEndpoint bool,
 ) (aws.Config, error) {
 	// We should respect the endpoint given (if any) because it could be the Gamma or Zeta endpoint of ECS service which
 	// don't have the corresponding FIPS endpoints. Otherwise, when the host has FIPS enabled, we should tell SDK to
@@ -154,8 +158,12 @@ func newECSConfig(
 	}
 	if configAccessor.APIEndpoint() != "" {
 		endpointFn = awsconfig.WithBaseEndpoint(configAccessor.APIEndpoint())
-	} else if isFIPSEnabled {
-		endpointFn = awsconfig.WithUseFIPSEndpoint(aws.FIPSEndpointStateEnabled)
+	} else {
+		if isFIPSEnabled {
+			endpointFn = awsconfig.WithUseFIPSEndpoint(aws.FIPSEndpointStateEnabled)
+		}
+		if shouldUseDualStackEndpoint {
+		}
 	}
 
 	ecsConfig, err := awsconfig.LoadDefaultConfig(
