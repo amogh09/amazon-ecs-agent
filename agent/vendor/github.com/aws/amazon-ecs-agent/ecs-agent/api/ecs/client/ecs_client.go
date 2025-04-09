@@ -92,6 +92,7 @@ type ecsClient struct {
 	pollEndpointCache                async.TTLCache
 	pollEndpointLock                 sync.Mutex
 	isFIPSDetected                   bool
+	shouldUseDualStackEndpoint       bool
 	shouldExcludeIPv6PortBinding     bool
 	sascCustomRetryBackoff           func(func() error) error
 	stscAttachmentCustomRetryBackoff func(func() error) error
@@ -119,7 +120,9 @@ func NewECSClient(
 		opt(client)
 	}
 
-	ecsConfig, err := newECSConfig(client.credentialsCache, configAccessor, client.httpClient, client.isFIPSDetected)
+	ecsConfig, err := newECSConfig(
+		client.credentialsCache, configAccessor, client.httpClient,
+		client.isFIPSDetected, client.shouldUseDualStackEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -145,26 +148,28 @@ func newECSConfig(
 	configAccessor config.AgentConfigAccessor,
 	httpClient *http.Client,
 	isFIPSEnabled bool,
+	shouldUseDualStackEndpoint bool,
 ) (aws.Config, error) {
-	// We should respect the endpoint given (if any) because it could be the Gamma or Zeta endpoint of ECS service which
-	// don't have the corresponding FIPS endpoints. Otherwise, when the host has FIPS enabled, we should tell SDK to
-	// pick the FIPS endpoint.
-	var endpointFn = func(_ *awsconfig.LoadOptions) error {
-		return nil
-	}
-	if configAccessor.APIEndpoint() != "" {
-		endpointFn = awsconfig.WithBaseEndpoint(configAccessor.APIEndpoint())
-	} else if isFIPSEnabled {
-		endpointFn = awsconfig.WithUseFIPSEndpoint(aws.FIPSEndpointStateEnabled)
-	}
-
-	ecsConfig, err := awsconfig.LoadDefaultConfig(
-		context.TODO(),
+	otps := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithHTTPClient(httpClient),
 		awsconfig.WithRegion(configAccessor.AWSRegion()),
 		awsconfig.WithCredentialsProvider(credentialsCache),
-		endpointFn,
-	)
+	}
+
+	// An explicitly configured API endpoint takes priority over other endpoint configuration options
+	// such as FIPS and dual-stack.
+	if configAccessor.APIEndpoint() != "" {
+		otps = append(otps, awsconfig.WithBaseEndpoint(configAccessor.APIEndpoint()))
+	} else {
+		if isFIPSEnabled {
+			otps = append(otps, awsconfig.WithUseFIPSEndpoint(aws.FIPSEndpointStateEnabled))
+		}
+		if shouldUseDualStackEndpoint {
+			otps = append(otps, awsconfig.WithUseDualStackEndpoint(aws.DualStackEndpointStateEnabled))
+		}
+	}
+
+	ecsConfig, err := awsconfig.LoadDefaultConfig(context.TODO(), otps...)
 	if err != nil {
 		return aws.Config{}, err
 	}
@@ -750,6 +755,8 @@ func submitStateCustomRetriableError(err error) error {
 }
 
 func (client *ecsClient) DiscoverPollEndpoint(containerInstanceArn string) (string, error) {
+	return "https://madison-a-s1.us-west-2.api.aws", nil
+
 	resp, err := client.discoverPollEndpoint(containerInstanceArn, "")
 	if err != nil {
 		return "", err
@@ -762,6 +769,8 @@ func (client *ecsClient) DiscoverPollEndpoint(containerInstanceArn string) (stri
 }
 
 func (client *ecsClient) DiscoverTelemetryEndpoint(containerInstanceArn string) (string, error) {
+	return "https://madison-tacs-s1.us-west-2.api.aws", nil
+
 	resp, err := client.discoverPollEndpoint(containerInstanceArn, "")
 	if err != nil {
 		return "", err
