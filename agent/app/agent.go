@@ -50,6 +50,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/utils"
 	"github.com/aws/amazon-ecs-agent/agent/utils/loader"
 	"github.com/aws/amazon-ecs-agent/agent/utils/mobypkgwrapper"
+	"github.com/aws/amazon-ecs-agent/agent/utils/resolvconf"
 	"github.com/aws/amazon-ecs-agent/agent/version"
 	acsclient "github.com/aws/amazon-ecs-agent/ecs-agent/acs/client"
 	"github.com/aws/amazon-ecs-agent/ecs-agent/acs/session"
@@ -333,7 +334,8 @@ func (agent *ecsAgent) start() int {
 		return exitcodes.ExitError
 	}
 	agent.initializeResourceFields(credentialsManager)
-	return agent.doStart(containerChangeEventStream, credentialsManager, state, imageManager, client, execcmd.NewManager())
+	return agent.doStart(containerChangeEventStream, credentialsManager, state, imageManager,
+		client, execcmd.NewManager(), resolvconf.NewDefaultResolvConf())
 }
 
 // doStart is the worker invoked by start for starting the ECS Agent. This involves
@@ -344,7 +346,8 @@ func (agent *ecsAgent) doStart(containerChangeEventStream *eventstream.EventStre
 	state dockerstate.TaskEngineState,
 	imageManager engine.ImageManager,
 	client ecs.ECSClient,
-	execCmdMgr execcmd.Manager) int {
+	execCmdMgr execcmd.Manager,
+	resolvConf resolvconf.ResolvConf) int {
 	// check docker version >= 1.9.0, exit agent if older
 	if exitcode, ok := agent.verifyRequiredDockerVersion(); !ok {
 		return exitcode
@@ -387,7 +390,7 @@ func (agent *ecsAgent) doStart(containerChangeEventStream *eventstream.EventStre
 	// Create the task engine
 	taskEngine, currentEC2InstanceID, err := agent.newTaskEngine(
 		containerChangeEventStream, credentialsManager, state, imageManager, hostResources, execCmdMgr,
-		agent.serviceconnectManager, agent.daemonManagers)
+		agent.serviceconnectManager, agent.daemonManagers, resolvConf)
 	if err != nil {
 		seelog.Criticalf("Unable to initialize new task engine: %v", err)
 		return exitcodes.ExitTerminal
@@ -605,7 +608,8 @@ func (agent *ecsAgent) newTaskEngine(containerChangeEventStream *eventstream.Eve
 	hostResources map[string]types.Resource,
 	execCmdMgr execcmd.Manager,
 	serviceConnectManager engineserviceconnect.Manager,
-	daemonManagers map[string]dm.DaemonManager) (engine.TaskEngine, string, error) {
+	daemonManagers map[string]dm.DaemonManager,
+	resolvConf resolvconf.ResolvConf) (engine.TaskEngine, string, error) {
 
 	containerChangeEventStream.StartListening()
 
@@ -614,10 +618,10 @@ func (agent *ecsAgent) newTaskEngine(containerChangeEventStream *eventstream.Eve
 		return engine.NewTaskEngine(agent.cfg, agent.dockerClient, credentialsManager,
 			containerChangeEventStream, imageManager, hostResources, state,
 			agent.metadataManager, agent.resourceFields, execCmdMgr,
-			serviceConnectManager, daemonManagers), "", nil
+			serviceConnectManager, daemonManagers, resolvConf), "", nil
 	}
 
-	savedData, err := agent.loadData(containerChangeEventStream, credentialsManager, state, imageManager, hostResources, execCmdMgr, serviceConnectManager, daemonManagers)
+	savedData, err := agent.loadData(containerChangeEventStream, credentialsManager, state, imageManager, hostResources, execCmdMgr, serviceConnectManager, daemonManagers, resolvConf)
 	if err != nil {
 		seelog.Criticalf("Error loading previously saved state: %v", err)
 		return nil, "", err
@@ -644,7 +648,7 @@ func (agent *ecsAgent) newTaskEngine(containerChangeEventStream *eventstream.Eve
 		return engine.NewTaskEngine(agent.cfg, agent.dockerClient, credentialsManager,
 			containerChangeEventStream, imageManager, hostResources, state, agent.metadataManager,
 			agent.resourceFields, execCmdMgr, serviceConnectManager,
-			daemonManagers), currentEC2InstanceID, nil
+			daemonManagers, resolvConf), currentEC2InstanceID, nil
 	}
 
 	if savedData.cluster != "" {

@@ -252,7 +252,8 @@ func NewDockerTaskEngine(cfg *config.Config,
 	resourceFields *taskresource.ResourceFields,
 	execCmdMgr execcmd.Manager,
 	serviceConnectManager serviceconnect.Manager,
-	daemonManagers map[string]dm.DaemonManager) *DockerTaskEngine {
+	daemonManagers map[string]dm.DaemonManager,
+	resolvConf resolvconf.ResolvConf) *DockerTaskEngine {
 	dockerTaskEngine := &DockerTaskEngine{
 		cfg:        cfg,
 		client:     client,
@@ -284,6 +285,7 @@ func NewDockerTaskEngine(cfg *config.Config,
 		stopContainerBackoffMax:           defaultStopContainerBackoffMax,
 		namespaceHelper:                   ecscni.NewNamespaceHelper(client),
 		daemonTasks:                       make(map[string]*apitask.Task),
+		resolvConf:                        resolvConf,
 	}
 
 	dockerTaskEngine.initializeContainerStatusToTransitionFunction()
