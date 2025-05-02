@@ -17,16 +17,18 @@ package resolvconf
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 )
 
 const (
 	// defaultPath is the default path to the resolv.conf that contains information to resolve DNS. See Path()
-	defaultPath = "/etc/resolv.conf"
+	defaultPath = "/host/etc/resolv.conf"
 	// alternatePath is a path different from defaultPath, that may be used to resolve DNS. See Path().
-	alternatePath = "/run/systemd/resolve/resolv.conf"
+	alternatePath = "/host/run/systemd/resolve/resolv.conf"
 )
 
 type IPVersion int
@@ -51,9 +53,6 @@ const (
 )
 
 var (
-	detectSystemdResolvConfOnce sync.Once
-	pathAfterSystemdDetection   = defaultPath
-
 	nsRegexp          = regexp.MustCompile(`^\s*nameserver\s*((` + ipv4Address + `)|(` + ipv6Address + `))\s*$`)
 	nsIPv6Regexpmatch = regexp.MustCompile(`^\s*nameserver\s*((` + ipv6Address + `))\s*$`)
 	nsIPv4Regexpmatch = regexp.MustCompile(`^\s*nameserver\s*((` + ipv4Address + `))\s*$`)
@@ -61,19 +60,35 @@ var (
 	optionsRegexp     = regexp.MustCompile(`^\s*options\s*(([^\s]+\s*)*)$`)
 )
 
-// Path returns the path to the resolv.conf file that libnetwork should use.
+type ResolvConf interface {
+	GetNameServers(kind IPVersion) ([]string, error)
+}
+
+type resolvConf struct {
+	detectSystemdResolvConfOnce sync.Once
+	pathAfterSystemdDetection   string
+}
+
+func NewDefaultResolvConf() ResolvConf {
+	return &resolvConf{
+		detectSystemdResolvConfOnce: sync.Once{},
+		pathAfterSystemdDetection:   defaultPath,
+	}
+}
+
+// path returns the path to the resolv.conf file.
 //
 // When /etc/resolv.conf contains 127.0.0.53 as the only nameserver, then
 // it is assumed systemd-resolved manages DNS. Because inside the container 127.0.0.53
-// is not a valid DNS server, Path() returns /run/systemd/resolve/resolv.conf
+// is not a valid DNS server, path() returns /run/systemd/resolve/resolv.conf
 // which is the resolv.conf that systemd-resolved generates and manages.
-// Otherwise Path() returns /etc/resolv.conf.
+// Otherwise path() returns /etc/resolv.conf.
 //
 // Errors are silenced as they will inevitably resurface at future open/read calls.
 //
 // More information at https://www.freedesktop.org/software/systemd/man/systemd-resolved.service.html#/etc/resolv.conf
-func Path() string {
-	detectSystemdResolvConfOnce.Do(func() {
+func (rc *resolvConf) path() string {
+	rc.detectSystemdResolvConfOnce.Do(func() {
 		candidateResolvConf, err := os.ReadFile(defaultPath)
 		if err != nil {
 			// silencing error as it will resurface at next calls trying to read defaultPath
@@ -81,10 +96,26 @@ func Path() string {
 		}
 		ns := GetNameservers(candidateResolvConf, IPvAny)
 		if len(ns) == 1 && ns[0] == "127.0.0.53" {
-			pathAfterSystemdDetection = alternatePath
+			rc.pathAfterSystemdDetection = alternatePath
 		}
 	})
-	return pathAfterSystemdDetection
+	return rc.pathAfterSystemdDetection
+}
+
+func (rc *resolvConf) readResolvConf() ([]byte, error) {
+	contents, err := os.ReadFile(rc.path())
+	if err != nil {
+		return nil, fmt.Errorf("failed to read resolv.conf: %w", err)
+	}
+	return contents, nil
+}
+
+func (rc *resolvConf) GetNameServers(kind IPVersion) ([]string, error) {
+	contents, err := rc.readResolvConf()
+	if err != nil {
+		return nil, err
+	}
+	return GetNameservers(contents, kind), nil
 }
 
 // GetNameservers returns nameservers (if any) listed in /etc/resolv.conf
@@ -119,4 +150,34 @@ func getLines(input []byte, commentMarker []byte) [][]byte {
 		}
 	}
 	return output
+}
+
+// GetSearchDomains returns search domains (if any) listed in /etc/resolv.conf
+// If more than one search line is encountered, only the contents of the last
+// one is returned.
+func GetSearchDomains(resolvConf []byte) []string {
+	var domains []string
+	for _, line := range getLines(resolvConf, []byte("#")) {
+		match := searchRegexp.FindSubmatch(line)
+		if match == nil {
+			continue
+		}
+		domains = strings.Fields(string(match[1]))
+	}
+	return domains
+}
+
+// GetOptions returns options (if any) listed in /etc/resolv.conf
+// If more than one options line is encountered, only the contents of the last
+// one is returned.
+func GetOptions(resolvConf []byte) []string {
+	var options []string
+	for _, line := range getLines(resolvConf, []byte("#")) {
+		match := optionsRegexp.FindSubmatch(line)
+		if match == nil {
+			continue
+		}
+		options = strings.Fields(string(match[1]))
+	}
+	return options
 }

@@ -125,3 +125,141 @@ nameserver 8.8.4.4
 		})
 	}
 }
+
+func TestGetSearchDomains(t *testing.T) {
+	tests := []struct {
+		name       string
+		resolvConf string
+		expected   []string
+	}{
+		{
+			name: "single search domain",
+			resolvConf: `search example.com
+`,
+			expected: []string{"example.com"},
+		},
+		{
+			name: "multiple search domains on single line",
+			resolvConf: `search example.com example.org example.net
+`,
+			expected: []string{"example.com", "example.org", "example.net"},
+		},
+		{
+			name: "multiple search lines - should use last one",
+			resolvConf: `search example.com
+search example.org example.net
+`,
+			expected: []string{"example.org", "example.net"},
+		},
+		{
+			name: "with comments",
+			resolvConf: `# This is a comment
+search example.com example.org # Another comment
+`,
+			expected: []string{"example.com", "example.org"},
+		},
+		{
+			name: "with other resolv.conf entries",
+			resolvConf: `domain example.com
+nameserver 8.8.8.8
+search example.org example.net
+options ndots:5
+`,
+			expected: []string{"example.org", "example.net"},
+		},
+		{
+			name: "with extra whitespace",
+			resolvConf: `search   example.com    example.org
+`,
+			expected: []string{"example.com", "example.org"},
+		},
+		{
+			name:       "empty resolv.conf",
+			resolvConf: "",
+			expected:   nil,
+		},
+		{
+			name: "no search domains",
+			resolvConf: `nameserver 8.8.8.8
+options ndots:5
+`,
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetSearchDomains([]byte(tt.resolvConf))
+			assert.Equal(t, tt.expected, result, "search domains should match expected values")
+		})
+	}
+}
+
+func TestGetOptions(t *testing.T) {
+	tests := []struct {
+		name       string
+		resolvConf string
+		expected   []string
+	}{
+		{
+			name: "single option",
+			resolvConf: `options ndots:5
+`,
+			expected: []string{"ndots:5"},
+		},
+		{
+			name: "multiple options on single line",
+			resolvConf: `options ndots:5 timeout:3 attempts:2
+`,
+			expected: []string{"ndots:5", "timeout:3", "attempts:2"},
+		},
+		{
+			name: "multiple option lines - should use last one",
+			resolvConf: `options ndots:5
+options timeout:3 attempts:2
+`,
+			expected: []string{"timeout:3", "attempts:2"},
+		},
+		{
+			name: "with comments",
+			resolvConf: `# This is a comment
+options ndots:5 timeout:3 # Another comment
+`,
+			expected: []string{"ndots:5", "timeout:3"},
+		},
+		{
+			name: "with other resolv.conf entries",
+			resolvConf: `domain example.com
+nameserver 8.8.8.8
+search example.org
+options ndots:5 timeout:3
+`,
+			expected: []string{"ndots:5", "timeout:3"},
+		},
+		{
+			name: "with extra whitespace",
+			resolvConf: `options   ndots:5    timeout:3
+`,
+			expected: []string{"ndots:5", "timeout:3"},
+		},
+		{
+			name:       "empty resolv.conf",
+			resolvConf: "",
+			expected:   nil,
+		},
+		{
+			name: "no options",
+			resolvConf: `nameserver 8.8.8.8
+search example.com
+`,
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetOptions([]byte(tt.resolvConf))
+			assert.Equal(t, tt.expected, result, "options should match expected values")
+		})
+	}
+}

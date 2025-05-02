@@ -46,6 +46,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/taskresource/firelens"
 	"github.com/aws/amazon-ecs-agent/agent/utils"
 	referenceutil "github.com/aws/amazon-ecs-agent/agent/utils/reference"
+	"github.com/aws/amazon-ecs-agent/agent/utils/resolvconf"
 	"github.com/aws/amazon-ecs-agent/ecs-agent/api/appnet"
 	apicontainerstatus "github.com/aws/amazon-ecs-agent/ecs-agent/api/container/status"
 	apierrors "github.com/aws/amazon-ecs-agent/ecs-agent/api/errors"
@@ -233,6 +234,7 @@ type DockerTaskEngine struct {
 	stopContainerBackoffMin   time.Duration
 	stopContainerBackoffMax   time.Duration
 	namespaceHelper           ecscni.NamespaceHelper
+	resolvConf                resolvconf.ResolvConf
 }
 
 // NewDockerTaskEngine returns a created, but uninitialized, DockerTaskEngine.
@@ -2420,6 +2422,31 @@ func (engine *DockerTaskEngine) provisionContainerResourcesAwsvpc(task *apitask.
 				fromError: fmt.Errorf(
 					"container resource provisioning: unable to build cni configuration, %+v", err),
 			},
+		}
+	}
+
+	eni := task.GetPrimaryENI()
+	if eni != nil && (eni.IPv6Only() || engine.cfg.InstanceIPCompatibility.IsIPv6Only()) {
+		if len(eni.DNSMappingList) == 0 {
+			logger.Info("Will resolve DNS servers from resolv.conf", logger.Fields{
+				field.TaskID: task.GetID(),
+			})
+			ipv := resolvconf.IPv4
+			if eni.IPv6Only() {
+				ipv = resolvconf.IPv6
+			}
+			nameServers, err := engine.resolvConf.GetNameServers(ipv)
+			if err != nil {
+				return dockerapi.DockerContainerMetadata{
+					Error: ContainerNetworkingError{
+						fromError: fmt.Errorf("failed to get nameservers from the container instance: %v", err),
+					},
+				}
+			}
+			logger.Info("Resolved DNS servers from resolv.conf", logger.Fields{
+				field.TaskID: task.GetID(),
+			})
+			eni.DomainNameServers = nameServers
 		}
 	}
 
