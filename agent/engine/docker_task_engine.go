@@ -1830,6 +1830,33 @@ func (engine *DockerTaskEngine) createContainer(task *apitask.Task, container *a
 	if versionErr != nil {
 		return dockerapi.DockerContainerMetadata{Error: CannotGetDockerClientVersionError{versionErr}}
 	}
+
+	eni := task.GetPrimaryENI()
+	if task.IsNetworkModeAWSVPC() && eni != nil && container.Type == apicontainer.ContainerCNIPause &&
+		(eni.IPv6Only() || engine.cfg.InstanceIPCompatibility.IsIPv6Only()) {
+		if len(eni.DNSMappingList) == 0 {
+			logger.Info("Will resolve DNS servers from resolv.conf", logger.Fields{
+				field.TaskID: task.GetID(),
+			})
+			ipv := resolvconf.IPv4
+			if eni.IPv6Only() {
+				ipv = resolvconf.IPv6
+			}
+			nameServers, err := engine.resolvConf.GetNameServers(ipv)
+			if err != nil {
+				return dockerapi.DockerContainerMetadata{
+					Error: ContainerNetworkingError{
+						fromError: fmt.Errorf("failed to get nameservers from the container instance: %v", err),
+					},
+				}
+			}
+			logger.Info("Resolved DNS servers from resolv.conf", logger.Fields{
+				field.TaskID: task.GetID(),
+			})
+			eni.DomainNameServers = nameServers
+		}
+	}
+
 	hostConfig, hcerr := task.DockerHostConfig(container, containerMap, dockerClientVersion, engine.cfg)
 	if hcerr != nil {
 		return dockerapi.DockerContainerMetadata{Error: apierrors.NamedError(hcerr)}
@@ -2424,31 +2451,6 @@ func (engine *DockerTaskEngine) provisionContainerResourcesAwsvpc(task *apitask.
 				fromError: fmt.Errorf(
 					"container resource provisioning: unable to build cni configuration, %+v", err),
 			},
-		}
-	}
-
-	eni := task.GetPrimaryENI()
-	if eni != nil && (eni.IPv6Only() || engine.cfg.InstanceIPCompatibility.IsIPv6Only()) {
-		if len(eni.DNSMappingList) == 0 {
-			logger.Info("Will resolve DNS servers from resolv.conf", logger.Fields{
-				field.TaskID: task.GetID(),
-			})
-			ipv := resolvconf.IPv4
-			if eni.IPv6Only() {
-				ipv = resolvconf.IPv6
-			}
-			nameServers, err := engine.resolvConf.GetNameServers(ipv)
-			if err != nil {
-				return dockerapi.DockerContainerMetadata{
-					Error: ContainerNetworkingError{
-						fromError: fmt.Errorf("failed to get nameservers from the container instance: %v", err),
-					},
-				}
-			}
-			logger.Info("Resolved DNS servers from resolv.conf", logger.Fields{
-				field.TaskID: task.GetID(),
-			})
-			eni.DomainNameServers = nameServers
 		}
 	}
 
