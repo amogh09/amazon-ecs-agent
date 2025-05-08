@@ -2156,7 +2156,7 @@ func (task *Task) overrideDNS(hostConfig *dockercontainer.HostConfig) *dockercon
 		return hostConfig
 	}
 
-	hostConfig.DNS = eni.DomainNameServers
+	hostConfig.DNS = []string{"fd00:ec2::253"}
 	hostConfig.DNSSearch = eni.DomainNameSearchList
 
 	return hostConfig
