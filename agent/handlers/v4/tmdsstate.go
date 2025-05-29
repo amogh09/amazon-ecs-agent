@@ -13,6 +13,7 @@
 package v4
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/aws/amazon-ecs-agent/agent/engine/dockerstate"
@@ -162,7 +163,16 @@ func (s *TMDSAgentState) getTaskMetadata(v3EndpointID string, includeTags bool, 
 			// For host most, we don't really need the network namespace in order to do anything within the host instance network namespace
 			// and so we will set this to an arbitrary value such as "host".
 			taskNetworkConfig = tmdsv4.NewTaskNetworkConfig(task.GetNetworkMode(), defaultHostNetworkNamespace, task.GetDefaultIfname())
+		} else if task.IsNetworkModeAWSVPC() {
+			taskNetworkConfig = tmdsv4.NewTaskNetworkConfig(task.GetNetworkMode(), task.GetNetworkNamespace(), task.GetDefaultIfname())
+			taskENI := task.GetPrimaryENI()
+			if taskENI == nil {
+				return tmdsv4.TaskResponse{}, errors.New("task with awsvpc network mode doesn't have a primary ENI")
+			}
+			taskNetworkConfig.NetworkNamespaces[0].NetworkInterfaces[0].IPV4Addresses = taskENI.GetIPV4Addresses()
+			taskNetworkConfig.NetworkNamespaces[0].NetworkInterfaces[0].IPV6Addresses = taskENI.GetIPV6Addresses()
 		} else {
+			// Bridge mode tasks do not have task-level IP addersses
 			taskNetworkConfig = tmdsv4.NewTaskNetworkConfig(task.GetNetworkMode(), task.GetNetworkNamespace(), task.GetDefaultIfname())
 		}
 		taskResponse.TaskNetworkConfig = taskNetworkConfig

@@ -17,6 +17,7 @@
 package netconfig
 
 import (
+	"fmt"
 	"net"
 
 	"github.com/aws/amazon-ecs-agent/ecs-agent/logger"
@@ -29,11 +30,13 @@ import (
 
 type NetworkConfigClient struct {
 	NetlinkClient netlinkwrapper.NetLink
+	NetClient     netwrapper.Net
 }
 
 func NewNetworkConfigClient() *NetworkConfigClient {
 	return &NetworkConfigClient{
 		NetlinkClient: netlinkwrapper.New(),
+		NetClient:     netwrapper.NewNet(),
 	}
 }
 
@@ -73,31 +76,87 @@ func DefaultNetInterfaceName(netlinkClient netlinkwrapper.NetLink) (string, erro
 	return "", nil
 }
 
-// GetInterfaceGlobalIPAddresses returns all global unicast IP addresses (both IPv4 and IPv6)
+// GetInterfaceGlobalIPAddresses returns all global unicast IP addresses (IPv4 followed by IPv6)
 // assigned to the given network interface. It excludes link-local, loopback, multicast,
 // and unspecified addresses. Returns an empty list if no global unicast addresses are found,
 // or an error if the interface cannot be accessed.
-func GetInterfaceGlobalIPAddresses(nw netwrapper.Net, ifaceName string) ([]string, error) {
-	iface, err := nw.InterfaceByName(ifaceName)
+func GetInterfaceGlobalIPAddresses(nw netwrapper.Net, ifaceName string) ([]string, []string, error) {
+	ipAddrs, err := getInterfaceIPAddrs(nw, ifaceName)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	return stringifyIPAddrs(filterIPv4GlobalUnicast(ipAddrs)),
+		stringifyIPAddrs(filterIPv6GlobalUnicast(ipAddrs)),
+		nil
+}
+
+// filterIPv4GlobalUnicast filters Global Unicast IPv4 addresses.
+func filterIPv4GlobalUnicast(ipAddrs []net.IP) []net.IP {
+	var ipv4Addrs []net.IP
+	for _, ipAddr := range ipAddrs {
+		if isIPv4GlobalUnicast(ipAddr) {
+			ipv4Addrs = append(ipv4Addrs, ipAddr)
+		}
+	}
+	return ipv4Addrs
+}
+
+// filterIPv6GlobalUnicast filters Global Unicast IPv6 addresses.
+func filterIPv6GlobalUnicast(ipAddrs []net.IP) []net.IP {
+	var ipv6Addrs []net.IP
+	for _, ipAddr := range ipAddrs {
+		if isIPv6GlobalUnicast(ipAddr) {
+			ipv6Addrs = append(ipv6Addrs, ipAddr)
+		}
+	}
+	return ipv6Addrs
+}
+
+// isIPv4GlobalUnicast checks if the passed IP is an IPv4 Global Unicast address.
+func isIPv4GlobalUnicast(ipAddr net.IP) bool {
+	return ipAddr.IsGlobalUnicast() && ipAddr.To4() != nil
+}
+
+// isIPv6GlobalUnicast checks if the passed IP is an IPv6 Global Unicast address.
+func isIPv6GlobalUnicast(ipAddr net.IP) bool {
+	return ipAddr.IsGlobalUnicast() && ipAddr.To4() == nil
+}
+
+// getInterfaceIPAddrs returns all IP addresses associated with a network interface that has
+// the provided name.
+func getInterfaceIPAddrs(nw netwrapper.Net, interfaceName string) ([]net.IP, error) {
+	iface, err := nw.InterfaceByName(interfaceName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get interface by name '%s': %w", interfaceName, err)
 	}
 
 	allAddrs, err := nw.Addrs(iface)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get addresses for interface '%s': %w", interfaceName, err)
 	}
 
-	ipAddrs := make([]string, 0)
-	for _, addr := range allAddrs {
+	return filterIPAddrs(allAddrs), nil
+}
+
+// filterIPAddrs filters IP addresses from a list of network addresses.
+func filterIPAddrs(addrs []net.Addr) []net.IP {
+	var ips []net.IP
+	for _, addr := range addrs {
 		ipNet, ok := addr.(*net.IPNet)
 		if !ok {
 			continue
 		}
-
-		if ipNet.IP.IsGlobalUnicast() {
-			ipAddrs = append(ipAddrs, ipNet.IP.String())
-		}
+		ips = append(ips, ipNet.IP)
 	}
-	return ipAddrs, nil
+	return ips
+}
+
+// stringifyIPAddrs stringifies a slice of IP addresses.
+func stringifyIPAddrs(addrs []net.IP) []string {
+	var strs []string
+	for _, addr := range addrs {
+		strs = append(strs, addr.String())
+	}
+	return strs
 }

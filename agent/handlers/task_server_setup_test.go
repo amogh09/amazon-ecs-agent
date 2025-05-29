@@ -735,8 +735,13 @@ func expectedV4TaskResponse() v4.TaskResponse {
 	)
 }
 
-func expectedV4TaskNetworkConfig(enableFaultInjection bool, networkMode, path, deviceName string) *v4.TaskNetworkConfig {
-	return v4.NewTaskNetworkConfig(networkMode, path, deviceName)
+func expectedV4TaskNetworkConfig(
+	networkMode, path, deviceName string, ipv4Addrs, ipv6Addrs []string,
+) *v4.TaskNetworkConfig {
+	netcfg := v4.NewTaskNetworkConfig(networkMode, path, deviceName)
+	netcfg.NetworkNamespaces[0].NetworkInterfaces[0].IPV4Addresses = ipv4Addrs
+	netcfg.NetworkNamespaces[0].NetworkInterfaces[0].IPV6Addresses = ipv6Addrs
+	return netcfg
 }
 
 // expectedV4TaskResponseHostModeWithFaultInjectionEnabled returns a standard v4 task response with

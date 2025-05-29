@@ -43,13 +43,31 @@ func (s *TMDSAgentState) GetTaskMetadataWithTaskNetworkConfig(v3EndpointID strin
 					field.Error:    err,
 					"netlinkError": netErr,
 				})
-			} else {
-				logger.Info("Obtained default network interface name on host", logger.Fields{
-					field.TaskARN:       taskResponse.TaskARN,
-					"defaultDeviceName": hostDeviceName,
-				})
+				return taskResponse, err
 			}
+			logger.Info("Obtained default network interface name on host", logger.Fields{
+				field.TaskARN:       taskResponse.TaskARN,
+				"defaultDeviceName": hostDeviceName,
+			})
 			taskResponse.TaskNetworkConfig.NetworkNamespaces[0].NetworkInterfaces[0].DeviceName = hostDeviceName
+
+			hostIPv4Addrs, hostIPv6Addrs, netErr := netconfig.GetInterfaceGlobalIPAddresses(
+				networkConfigClient.NetClient, hostDeviceName)
+			if netErr != nil {
+				err = tmdsv4.NewErrorDefaultNetworkInterfaceIPAddrs(hostDeviceName)
+				logger.Error(
+					"Unable to obtain IP addresses of the default network interface on host",
+					logger.Fields{
+						field.TaskARN: taskResponse.TaskARN,
+						field.Error:   err,
+						"netError":    netErr,
+					})
+				return taskResponse, err
+			}
+			taskResponse.TaskNetworkConfig.NetworkNamespaces[0].NetworkInterfaces[0].
+				IPV4Addresses = hostIPv4Addrs
+			taskResponse.TaskNetworkConfig.NetworkNamespaces[0].NetworkInterfaces[0].
+				IPV6Addresses = hostIPv6Addrs
 		}
 	}
 	return taskResponse, err

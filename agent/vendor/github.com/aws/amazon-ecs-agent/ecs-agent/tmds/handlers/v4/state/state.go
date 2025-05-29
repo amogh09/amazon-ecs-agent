@@ -111,6 +111,30 @@ func (e *ErrorDefaultNetworkInterfaceName) Error() string {
 	return fmt.Sprintf("failed to obtain default network interface name: %s", e.externalReason)
 }
 
+// ErrorDefaultNetworkInterfaceIPAddrs is returned when IP addresses of the default network
+// interface could not be determined.
+type ErrorDefaultNetworkInterfaceIPAddrs struct {
+	networkInterfaceName string
+}
+
+// NewErrorDefaultNetworkInterfaceIPAddrs constructs a new ErrorDefaultNetworkInterfaceeIPAddrs error.
+func NewErrorDefaultNetworkInterfaceIPAddrs(netInterfaceName string) *ErrorDefaultNetworkInterfaceIPAddrs {
+	return &ErrorDefaultNetworkInterfaceIPAddrs{networkInterfaceName: netInterfaceName}
+}
+
+// ExternalReason returns the externally exposed reason for the error.
+func (e *ErrorDefaultNetworkInterfaceIPAddrs) ExternalReason() string {
+	return fmt.Sprintf(
+		"failed to find IP addresses of the default network interface '%s'",
+		e.networkInterfaceName)
+}
+
+func (e *ErrorDefaultNetworkInterfaceIPAddrs) Error() string {
+	return fmt.Sprintf(
+		"failed to find IP addresses of the default network interface '%s'",
+		e.networkInterfaceName)
+}
+
 // Interface for interacting with Agent State relevant to TMDS
 type AgentState interface {
 	// Returns container metadata in v4 format for the container identified by the

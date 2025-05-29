@@ -1247,6 +1247,15 @@ func getTaskMetadataErrorResponse(endpointContainerID, requestType string, err e
 		return http.StatusInternalServerError, errors.New(errDefaultNetworkInterfaceName.ExternalReason())
 	}
 
+	var errDefaultNetworkInterfaceIPAddrs *state.ErrorDefaultNetworkInterfaceIPAddrs
+	if errors.As(err, &errDefaultNetworkInterfaceIPAddrs) {
+		logger.Error("Unable to obtain default network interface's IP addresses", logger.Fields{
+			field.Error:                   errDefaultNetworkInterfaceIPAddrs,
+			field.TMDSEndpointContainerID: endpointContainerID,
+		})
+		return http.StatusInternalServerError, errors.New(errDefaultNetworkInterfaceIPAddrs.ExternalReason())
+	}
+
 	logger.Error("Unknown error encountered when handling task metadata fetch failure", logger.Fields{
 		field.Error:       err,
 		field.RequestType: requestType,
