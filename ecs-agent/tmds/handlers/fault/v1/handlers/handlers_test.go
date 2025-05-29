@@ -811,15 +811,21 @@ func generateStartBlackHolePortFaultTestCases() []networkFaultInjectionTestCase 
 					// Create the chain in IPv6 table
 					exec.EXPECT().CommandContext(gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(cmdExec),
 					cmdExec.EXPECT().CombinedOutput().Times(1).Return([]byte(internalError), errors.New("fail the ipv6 table update")),
-					// Insert the rule to drop packets
-					//exec.EXPECT().CommandContext(gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(cmdExec),
-					//cmdExec.EXPECT().CombinedOutput().Times(1).Return([]byte{}, nil),
-					// Insert the chain
-					//exec.EXPECT().CommandContext(gomock.Any(), gomock.Any(), gomock.Any()).Times(1).Return(cmdExec),
-					//cmdExec.EXPECT().CombinedOutput().Times(1).Return([]byte{}, nil),
 				)
 			},
 			expectedResponseJSON: fmt.Sprintf(errorResponse, internalError),
+		},
+		{
+			name:                 fmt.Sprintf("%s Agent failed to get task IP addrs", startNetworkBlackHolePortTestPrefix),
+			expectedStatusCode:   500,
+			requestBody:          happyBlackHolePortReqBody,
+			expectedResponseBody: types.NewNetworkFaultInjectionErrorResponse(fmt.Sprintf(failedToFindIfaceIPAddrsError, "eth0")),
+			setAgentStateExpectations: func(agentState *mock_state.MockAgentState, netConfigClient *netconfig.NetworkConfigClient) {
+				agentState.EXPECT().GetTaskMetadataWithTaskNetworkConfig(endpointId, netConfigClient).
+					Return(state.TaskResponse{}, state.NewErrorDefaultNetworkInterfaceIPAddrs("eth0")).
+					Times(1)
+			},
+			expectedResponseJSON: fmt.Sprintf(errorResponse, fmt.Sprintf(failedToFindIfaceIPAddrsError, "eth0")),
 		},
 		{
 			name:               fmt.Sprintf("%s unknown request body", startNetworkBlackHolePortTestPrefix),
