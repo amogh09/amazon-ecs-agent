@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	apitask "github.com/aws/amazon-ecs-agent/agent/api/task"
+	"github.com/aws/amazon-ecs-agent/agent/config"
 	"github.com/aws/amazon-ecs-agent/agent/data"
 	"github.com/aws/amazon-ecs-agent/agent/engine/dockerstate"
 	mock_engine "github.com/aws/amazon-ecs-agent/agent/engine/mocks"
@@ -37,6 +38,7 @@ import (
 	mock_ecs "github.com/aws/amazon-ecs-agent/ecs-agent/api/ecs/mocks"
 	apitaskstatus "github.com/aws/amazon-ecs-agent/ecs-agent/api/task/status"
 	"github.com/aws/amazon-ecs-agent/ecs-agent/credentials"
+	"github.com/aws/amazon-ecs-agent/ecs-agent/ipcompatibility"
 	ni "github.com/aws/amazon-ecs-agent/ecs-agent/netlib/model/networkinterface"
 	"github.com/aws/amazon-ecs-agent/ecs-agent/wsclient"
 
@@ -83,8 +85,14 @@ func setup(t *testing.T, acsResponseSender wsclient.RespondFunc) *testHelper {
 	ctx := context.Background()
 	taskHandler := eventhandler.NewTaskHandler(ctx, data.NewNoopClient(), nil, nil)
 	latestSeqNumberTaskManifest := int64(10)
+
+	// Create a default agent configuration with IP compatibility
+	agentConfig := &config.Config{
+		InstanceIPCompatibility: ipcompatibility.NewIPv4OnlyCompatibility(),
+	}
+
 	payloadMsgHandler := NewPayloadMessageHandler(taskEngine, ecsClient, dataClient, taskHandler, credentialsManager,
-		&latestSeqNumberTaskManifest)
+		&latestSeqNumberTaskManifest, agentConfig)
 	payloadResponder := acssession.NewPayloadResponder(payloadMsgHandler, acsResponseSender)
 
 	return &testHelper{
@@ -1054,6 +1062,190 @@ func TestHandlePayloadMessageAddedFirelensData(t *testing.T) {
 	assert.NotNil(t, actual.Options)
 	assert.Equal(t, aws.ToString(expected.Options["enable-ecs-log-metadata"]),
 		actual.Options["enable-ecs-log-metadata"])
+}
+
+// TestHandlePayloadMessageIPv6OnlyValidation tests IPv6-only validation scenarios:
+// 1. A task payload with an IPv6-only ENI and no DomainNameServers is considered invalid.
+// 2. A task payload with an IPv4-only ENI and no DomainNameServers is considered invalid when the instance is IPv6-only.
+func TestHandlePayloadMessageIPv6OnlyValidation(t *testing.T) {
+	testCases := []struct {
+		name                     string
+		instanceIPCompatibility  ipcompatibility.IPCompatibility
+		ipv4Addresses            []*ecsacs.IPv4AddressAssignment
+		ipv6Addresses            []*ecsacs.IPv6AddressAssignment
+		subnetGatewayIPv4Address *string
+		subnetGatewayIPv6Address *string
+		domainNameServers        []*string
+		expectedError            string
+	}{
+		{
+			name:                     "IPv6-only ENI without DNS servers should be invalid",
+			instanceIPCompatibility:  ipcompatibility.NewDualStackCompatibility(),
+			ipv6Addresses:            []*ecsacs.IPv6AddressAssignment{{Address: aws.String("2001:db8::2")}},
+			subnetGatewayIPv6Address: aws.String("2001:db8::1/60"),
+			expectedError:            "ipv6-only task ENIs are required to have domain name servers",
+		},
+		{
+			name:                     "IPv6-only ENI with DNS servers should be valid",
+			instanceIPCompatibility:  ipcompatibility.NewDualStackCompatibility(),
+			ipv6Addresses:            []*ecsacs.IPv6AddressAssignment{{Address: aws.String("2001:db8::1")}},
+			subnetGatewayIPv6Address: aws.String("2001:db8::1/60"),
+			domainNameServers:        []*string{aws.String("8:8:8:8::")},
+		},
+		{
+			name:                    "IPv6-only instance getting an IPv4-only ENI without DNS servers should be invalid",
+			instanceIPCompatibility: ipcompatibility.NewIPv6OnlyCompatibility(),
+			ipv4Addresses: []*ecsacs.IPv4AddressAssignment{
+				{
+					Primary:        aws.Bool(true),
+					PrivateAddress: aws.String(testconst.IPv4Address),
+				},
+			},
+			subnetGatewayIPv4Address: aws.String(testconst.GatewayIPv4),
+			expectedError:            "eni domain name servers are required in the payload when the container instance is IPv6-only",
+		},
+		{
+			name:                    "IPv6-only instance getting a dual-stack ENI without DNS servers should be invalid",
+			instanceIPCompatibility: ipcompatibility.NewIPv6OnlyCompatibility(),
+			ipv4Addresses: []*ecsacs.IPv4AddressAssignment{
+				{
+					Primary:        aws.Bool(true),
+					PrivateAddress: aws.String(testconst.IPv4Address),
+				},
+			},
+			subnetGatewayIPv4Address: aws.String(testconst.GatewayIPv4),
+			ipv6Addresses: []*ecsacs.IPv6AddressAssignment{
+				{
+					Address: aws.String("2001:db8::1"),
+				},
+			},
+			expectedError: "eni domain name servers are required in the payload when the container instance is IPv6-only",
+		},
+		{
+			name:                    "IPv6-only instance getting an IPv4-only ENI with DNS servers should be valid",
+			instanceIPCompatibility: ipcompatibility.NewIPv6OnlyCompatibility(),
+			ipv4Addresses: []*ecsacs.IPv4AddressAssignment{
+				{
+					Primary:        aws.Bool(true),
+					PrivateAddress: aws.String(testconst.IPv4Address),
+				},
+			},
+			subnetGatewayIPv4Address: aws.String(testconst.GatewayIPv4),
+			domainNameServers:        aws.StringSlice([]string{"8.8.8.8"}),
+		},
+		{
+			name:                    "IPv6-only instance getting a dual-stack ENI with DNS servers should be valid",
+			instanceIPCompatibility: ipcompatibility.NewIPv6OnlyCompatibility(),
+			ipv4Addresses: []*ecsacs.IPv4AddressAssignment{
+				{
+					Primary:        aws.Bool(true),
+					PrivateAddress: aws.String(testconst.IPv4Address),
+				},
+			},
+			subnetGatewayIPv4Address: aws.String(testconst.GatewayIPv4),
+			ipv6Addresses: []*ecsacs.IPv6AddressAssignment{
+				{
+					Address: aws.String("2001:db8::1"),
+				},
+			},
+			domainNameServers: aws.StringSlice([]string{"8.8.8.8"}),
+		},
+		{
+			name:                    "IPv4-only ENI without DNS servers on an IPv4-only instance should be valid",
+			instanceIPCompatibility: ipcompatibility.NewIPv4OnlyCompatibility(),
+			ipv4Addresses: []*ecsacs.IPv4AddressAssignment{
+				{
+					Primary:        aws.Bool(true),
+					PrivateAddress: aws.String(testconst.IPv4Address),
+				},
+			},
+			subnetGatewayIPv4Address: aws.String(testconst.GatewayIPv4),
+		},
+		{
+			name:                    "Dual-stack ENI without DNS servers should be valid on a dual-stack instance",
+			instanceIPCompatibility: ipcompatibility.NewDualStackCompatibility(),
+			ipv4Addresses: []*ecsacs.IPv4AddressAssignment{
+				{
+					Primary:        aws.Bool(true),
+					PrivateAddress: aws.String(testconst.IPv4Address),
+				},
+			},
+			subnetGatewayIPv4Address: aws.String(testconst.GatewayIPv4),
+			ipv6Addresses: []*ecsacs.IPv6AddressAssignment{
+				{
+					Address: aws.String("2001:db8::1"),
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ackSent := make(chan *ecsacs.AckRequest)
+			taskStateChangeSubmitted := make(chan bool)
+			testResponseSender := func(response interface{}) error {
+				req, ok := response.(*ecsacs.AckRequest)
+				if ok {
+					ackSent <- req
+				}
+				return nil
+			}
+
+			tester := setup(t, testResponseSender)
+			// Configure instance IP compatibility based on test case
+			tester.payloadMessageHandler.agentConfig.InstanceIPCompatibility = tc.instanceIPCompatibility
+
+			// Set up mock ECS client for invalid task handling
+			mockECSACSClient := mock_ecs.NewMockECSClient(tester.ctrl)
+			taskHandler := eventhandler.NewTaskHandler(tester.ctx, data.NewNoopClient(), dockerstate.NewTaskEngineState(), mockECSACSClient)
+			tester.payloadMessageHandler.ecsClient = mockECSACSClient
+			tester.payloadMessageHandler.taskHandler = taskHandler
+			defer tester.ctrl.Finish()
+
+			if tc.expectedError != "" {
+				// Expect task state change submission for invalid tasks
+				mockECSACSClient.EXPECT().SubmitTaskStateChange(gomock.Any()).Do(func(change ecs.TaskStateChange) {
+					assert.False(t, change.MetadataGetter.GetTaskIsNil())
+					assert.Contains(t, change.Reason, tc.expectedError)
+					taskStateChangeSubmitted <- true
+				}).Times(1)
+			} else {
+				// Expect task to be added to engine for valid tasks
+				tester.mockTaskEngine.EXPECT().AddTask(gomock.Any()).Times(1)
+			}
+
+			// Create payload message with ENI configuration
+			testPayloadMessage.Tasks = []*ecsacs.Task{
+				{
+					Arn: aws.String(testconst.TaskARN),
+					ElasticNetworkInterfaces: []*ecsacs.ElasticNetworkInterface{
+						{
+							AttachmentArn:            aws.String(attachmentARN),
+							Ec2Id:                    aws.String(ec2ID),
+							Ipv4Addresses:            tc.ipv4Addresses,
+							Ipv6Addresses:            tc.ipv6Addresses,
+							SubnetGatewayIpv4Address: tc.subnetGatewayIPv4Address,
+							SubnetGatewayIpv6Address: tc.subnetGatewayIPv6Address,
+							MacAddress:               aws.String(testconst.RandomMAC),
+							DomainNameServers:        tc.domainNameServers,
+						},
+					},
+				},
+			}
+
+			// Handle the payload message
+			handlePayloadMessage := tester.payloadResponder.HandlerFunc().(func(message *ecsacs.PayloadMessage))
+			handlePayloadMessage(testPayloadMessage)
+
+			if tc.expectedError != "" {
+				// STSC expected for invalid tasks
+				<-taskStateChangeSubmitted
+			} else {
+				// Ack expected for valid tasks
+				<-ackSent
+			}
+		})
+	}
 }
 
 func TestHandleInvalidTask(t *testing.T) {

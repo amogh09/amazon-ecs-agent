@@ -1104,7 +1104,7 @@ func (agent *ecsAgent) startACSSession(
 	}
 
 	payloadMessageHandler := agentacs.NewPayloadMessageHandler(taskEngine, client, agent.dataClient, taskHandler,
-		credentialsManager, agent.latestSeqNumberTaskManifest)
+		credentialsManager, agent.latestSeqNumberTaskManifest, agent.cfg)
 	credsMetadataSetter := agentacs.NewCredentialsMetadataSetter(taskEngine, agent.getConfig().InstanceIPCompatibility)
 	eniHandler := agentacs.NewENIHandler(state, agent.dataClient)
 	manifestMessageIDAccessor := agentacs.NewManifestMessageIDAccessor()

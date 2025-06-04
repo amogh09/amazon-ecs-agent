@@ -18,6 +18,7 @@ import (
 
 	"github.com/aws/amazon-ecs-agent/agent/api"
 	apitask "github.com/aws/amazon-ecs-agent/agent/api/task"
+	"github.com/aws/amazon-ecs-agent/agent/config"
 	"github.com/aws/amazon-ecs-agent/agent/data"
 	"github.com/aws/amazon-ecs-agent/agent/engine"
 	"github.com/aws/amazon-ecs-agent/agent/eventhandler"
@@ -47,6 +48,7 @@ type payloadMessageHandler struct {
 	taskHandler                 *eventhandler.TaskHandler
 	credentialsManager          credentials.Manager
 	latestSeqNumberTaskManifest *int64
+	agentConfig                 *config.Config
 }
 
 // NewPayloadMessageHandler creates a new payloadMessageHandler.
@@ -55,7 +57,8 @@ func NewPayloadMessageHandler(taskEngine engine.TaskEngine,
 	dataClient data.Client,
 	taskHandler *eventhandler.TaskHandler,
 	credentialsManager credentials.Manager,
-	latestSeqNumberTaskManifest *int64) *payloadMessageHandler {
+	latestSeqNumberTaskManifest *int64,
+	agentConfig *config.Config) *payloadMessageHandler {
 	return &payloadMessageHandler{
 		taskEngine:                  taskEngine,
 		ecsClient:                   ecsClient,
@@ -63,6 +66,7 @@ func NewPayloadMessageHandler(taskEngine engine.TaskEngine,
 		taskHandler:                 taskHandler,
 		credentialsManager:          credentialsManager,
 		latestSeqNumberTaskManifest: latestSeqNumberTaskManifest,
+		agentConfig:                 agentConfig,
 	}
 }
 
@@ -165,14 +169,31 @@ func (pmHandler *payloadMessageHandler) addPayloadTasks(payload *ecsacs.PayloadM
 		}
 
 		// Add ENI information to the task struct.
+		eniValidationFailed := false
 		for _, acsENI := range task.ElasticNetworkInterfaces {
 			eni, err := ni.InterfaceFromACS(acsENI)
+			if err == nil {
+				if len(eni.DomainNameServers) == 0 {
+					// DomainNameServers are required if either instance or task is IPv6-only.
+					// This is because the instance's domain name servers might not be compatible with the task's networking if their
+					// IP compatibilities mismatch.
+					if pmHandler.agentConfig.InstanceIPCompatibility.IsIPv6Only() {
+						err = errors.New("eni domain name servers are required in the payload when the container instance is IPv6-only")
+					} else if eni.IPv6Only() {
+						err = errors.New("ipv6-only task ENIs are required to have domain name servers")
+					}
+				}
+			}
 			if err != nil {
 				pmHandler.handleInvalidTask(task, err, payload)
 				allTasksOK = false
+				eniValidationFailed = true
 				continue
 			}
 			apiTask.AddTaskENI(eni)
+		}
+		if eniValidationFailed {
+			continue
 		}
 
 		// Add the app mesh information to task struct.
