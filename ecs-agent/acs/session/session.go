@@ -361,7 +361,11 @@ func (s *session) startACSSession(ctx context.Context, client wsclient.ClientSer
 			responseSender).HandlerFunc())
 	}
 
-	if s.dockerVersion != "containerd" && s.addUpdateRequestHandlers != nil {
+	// The historical guard skipped update-handler registration on containerd
+	// (Fargate/Two) because Fargate had no out-of-band agent update path. The
+	// Fargate agent-updater POC (WS2) adds one, so register handlers whenever a
+	// non-nil registrar is supplied, regardless of dockerVersion.
+	if s.addUpdateRequestHandlers != nil {
 		s.addUpdateRequestHandlers(client)
 	}
 
